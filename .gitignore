@@ -1,0 +1,43 @@
+# Data: never committed. Only DVC pointer files under data/ are tracked by git.
+data/*
+!data/*.dvc
+!data/.gitignore
+
+# Models, runs, credentials
+mlruns/
+mlartifacts/
+outputs/
+checkpoints/
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+.env
+kaggle.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Dagster
+.dagster_home/
+tmp*/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+PLAN.md
+CLAUDE.md

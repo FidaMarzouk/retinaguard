@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.13.5"
+      - name: Install
+        run: uv sync --all-extras --frozen
+      - name: Lint and type-check
+        run: make lint
+      - name: Test
+        run: make test
+      - name: Validate compose file
+        run: docker compose config --quiet

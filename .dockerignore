@@ -1,0 +1,12 @@
+.git
+.venv
+data
+mlruns
+mlartifacts
+outputs
+notebooks
+**/__pycache__
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.env
