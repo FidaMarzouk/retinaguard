@@ -8,7 +8,8 @@ The project mixes very different runtimes: a CPU inference API, a Streamlit app,
 
 ## Decision
 - uv manages the environment and lockfile (`uv.lock`), with Python pinned to 3.11.
-- Runtime dependencies are split into extras: `api`, `app`, `pipeline`. Each Docker image installs only its extra.
+- Runtime dependencies are split into extras: `api`, `app`, `data`, `pipeline`. Each Docker image installs only its extra.
+- `data` (pandas, pandera, pyarrow) holds the manifest code shared by the Dagster pipeline and the Kaggle preprocessing notebooks; `pipeline` depends on it. Added in Phase 1.
 - Dev tooling (ruff, mypy, pytest, pre-commit, DVC) goes in the `dev` dependency group.
 - Training dependencies (torch, timm, albumentations, segmentation-models-pytorch, ONNX, MLflow client) will be added in Phase 2 as an `ml` extra. Torch's CPU and CUDA wheels need index configuration, which is decided once there is training code to test it against.
 
