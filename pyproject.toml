@@ -21,6 +21,7 @@ app = [
     "streamlit>=1.38",
 ]
 data = [
+    "opencv-python-headless>=4.10",
     "pandas>=2.2",
     "pandera>=0.20",
     "pyarrow>=16",
