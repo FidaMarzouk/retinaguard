@@ -19,6 +19,9 @@ Image = npt.NDArray[np.uint8]
 
 DEFAULT_SIZE = 512
 PREPROCESS_VERSION = f"crop{DEFAULT_SIZE}_v1"
+# Stored as high-quality JPEG: ~10x smaller than PNG at 512 px, artefacts well below the
+# compression augmentation applied in training.
+JPEG_QUALITY = 95
 
 # A pixel belongs to the fundus if its red channel exceeds this fraction of the image's mean red
 # (Graham uses mean / 10 on the summed channels). Relative, so dark images are still found; the
@@ -105,6 +108,24 @@ def ben_graham(img: Image) -> Image:
     out = np.asarray(cv2.addWeighted(img, 4, blurred, -4, GREY), dtype=np.uint8)
     out[~circular_mask(size, BEN_GRAHAM_MASK_FRACTION * radius)] = GREY
     return out
+
+
+def decode_rgb(data: bytes) -> Image:
+    """Decode JPEG/PNG bytes to RGB (OpenCV decodes to BGR)."""
+    bgr = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if bgr is None:
+        raise ValueError("could not decode image bytes")
+    return np.asarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), dtype=np.uint8)
+
+
+def encode_jpeg(img: Image, quality: int = JPEG_QUALITY) -> bytes:
+    _check_rgb(img)
+    ok, buffer = cv2.imencode(
+        ".jpg", cv2.cvtColor(img, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, quality]
+    )
+    if not ok:
+        raise ValueError("JPEG encoding failed")
+    return bytes(buffer)
 
 
 def _check_rgb(img: Image) -> None:

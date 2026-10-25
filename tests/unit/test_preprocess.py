@@ -9,6 +9,8 @@ from retinaguard.data.preprocess import (
     ben_graham,
     circular_mask,
     crop_to_fundus,
+    decode_rgb,
+    encode_jpeg,
     find_fundus,
     preprocess,
 )
@@ -98,6 +100,19 @@ def test_ben_graham_masks_border() -> None:
     outside = ~circular_mask(512, 0.9 * 256)
     assert (out[outside] == 128).all()
     assert out.shape == (512, 512, 3)
+
+
+def test_jpeg_round_trip_keeps_rgb_order() -> None:
+    img = np.zeros((64, 64, 3), np.uint8)
+    img[..., 0] = 200  # pure red must stay in channel 0
+    decoded = decode_rgb(encode_jpeg(img))
+    assert decoded.shape == img.shape
+    assert np.abs(decoded.astype(int) - img).max() <= 3
+
+
+def test_decode_rejects_garbage() -> None:
+    with pytest.raises(ValueError, match="decode"):
+        decode_rgb(b"not an image")
 
 
 def test_circular_mask_area() -> None:
