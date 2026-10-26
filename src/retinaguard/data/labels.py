@@ -1,4 +1,4 @@
-"""Label harmonisation to ICDR 0-4 plus binary ``referable`` (PLAN.md §5)."""
+"""Label harmonisation to ICDR 0-4 plus binary ``referable``."""
 
 LABEL_MAP_VERSION = "v1"
 ICDR_GRADES = (0, 1, 2, 3, 4)

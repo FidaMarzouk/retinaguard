@@ -9,7 +9,7 @@ from retinaguard.data.preprocess import Image
 
 PHASH_SIZE = 8  # 8x8 low-frequency DCT block -> 64-bit hash
 PHASH_HIGHFREQ_FACTOR = 4  # DCT computed on a 32x32 downscale
-# Hamming distance at or below which two images count as near-duplicates (PLAN.md §7.2, inv. 3).
+# Hamming distance at or below which two images count as near-duplicates.
 NEAR_DUPLICATE_MAX_DISTANCE = 4
 
 

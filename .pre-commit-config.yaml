@@ -28,10 +28,10 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
-      # CLAUDE.md: only attributed IDRiD images may live in the repo, under tests/fixtures/.
+      # Only attributed IDRiD images may live in the repo, under tests/fixtures/.
       - id: no-images-or-weights
         name: no images, weights or datasets outside tests/fixtures
-        entry: Images, model weights and datasets must not be committed (see CLAUDE.md).
+        entry: Images, model weights and datasets must not be committed.
         language: fail
         files: \.(png|jpe?g|tiff?|bmp|dcm|onnx|pt|pth|ckpt|safetensors|parquet|zip)$
         exclude: ^tests/fixtures/

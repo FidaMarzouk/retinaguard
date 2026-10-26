@@ -1,4 +1,4 @@
-"""FastAPI app. Phase 0 exposes only health and version endpoints; prediction lands in Phase 6."""
+"""FastAPI app: health and version endpoints."""
 
 from fastapi import FastAPI
 from pydantic import BaseModel

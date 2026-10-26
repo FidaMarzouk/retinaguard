@@ -1,1 +1,1 @@
-"""train package (implemented in later phases)."""
+"""Training and evaluation."""

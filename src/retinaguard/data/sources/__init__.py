@@ -1,1 +1,1 @@
-"""sources package (implemented in later phases)."""
+"""One adapter per dataset, producing manifest rows."""

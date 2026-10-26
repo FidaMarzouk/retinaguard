@@ -1,4 +1,4 @@
-"""Dagster code location. Assets and checks are added in Phase 1."""
+"""Dagster code location."""
 
 from dagster import Definitions
 

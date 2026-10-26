@@ -1,1 +1,1 @@
-"""models package (implemented in later phases)."""
+"""Models, calibration and uncertainty."""

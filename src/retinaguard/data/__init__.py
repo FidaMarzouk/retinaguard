@@ -1,1 +1,1 @@
-"""data package (implemented in later phases)."""
+"""Dataset adapters, manifest schema, preprocessing and hashing."""

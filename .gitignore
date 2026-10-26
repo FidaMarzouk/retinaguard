@@ -42,6 +42,5 @@ Thumbs.db
 PLAN.md
 CLAUDE.md
 
-# Local-only working documents (decision records, reading notes)
-docs/adr/
-docs/references/
+# Local-only working documents (decision records, notes, results log)
+docs/

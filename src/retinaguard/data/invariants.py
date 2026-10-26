@@ -1,4 +1,4 @@
-"""Hard data invariants (PLAN.md §7.2) as pure functions.
+"""Hard data invariants of the image manifest, as pure functions.
 
 Each check returns the violations it found; an empty result means the invariant holds. The
 same functions back the Dagster asset checks and the unit tests. Invariant 3 (no near-duplicate

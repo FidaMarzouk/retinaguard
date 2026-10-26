@@ -1,4 +1,4 @@
-"""Pandera schemas for the image manifest (PLAN.md §7.1).
+"""Pandera schemas for the image manifest.
 
 Columns are added stage by stage: source adapters produce ``LabelManifestSchema`` rows from
 label files alone; image-derived columns (size, hashes, processed path, split) are added by
@@ -17,7 +17,7 @@ EYES = ("left", "right")
 QUALITY_LABELS = ("good", "usable", "reject")
 SPLITS = ("train", "val", "calib", "test_internal", "test_external")
 
-# Grading sources used only for external testing (§7.2 invariant 4).
+# Grading sources used only for external testing (see ``invariants.external_images_in_training``).
 EXTERNAL_SOURCES = ("aptos", "messidor2", "idrid", "ddr")
 TRAINING_SPLITS = ("train", "val", "calib")
 

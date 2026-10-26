@@ -1,4 +1,4 @@
-"""Streamlit entry point. Pages are added in Phase 6."""
+"""Streamlit entry point."""
 
 import streamlit as st
 

@@ -1,4 +1,4 @@
-"""Fundus image preprocessing (PLAN.md §8.1).
+"""Fundus image preprocessing.
 
 Stored images are only cropped to the fundus and resized (``PREPROCESS_VERSION``). Local mean
 normalisation is applied on the fly by ``local_mean_normalise`` so one processed dataset serves
