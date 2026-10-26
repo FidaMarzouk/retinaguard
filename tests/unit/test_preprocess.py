@@ -6,12 +6,13 @@ from retinaguard.data.preprocess import (
     Circle,
     FundusNotFoundError,
     Image,
-    ben_graham,
     circular_mask,
     crop_to_fundus,
     decode_rgb,
     encode_jpeg,
     find_fundus,
+    fundus_mask,
+    local_mean_normalise,
     preprocess,
 )
 
@@ -87,16 +88,16 @@ def test_preprocess_upscales_small_images() -> None:
     assert out.shape == (512, 512, 3)
 
 
-def test_ben_graham_flat_region_maps_to_grey() -> None:
-    out = ben_graham(preprocess(synthetic_fundus())[0])
+def test_local_mean_normalise_flat_region_maps_to_grey() -> None:
+    out = local_mean_normalise(preprocess(synthetic_fundus())[0])
     # Uniform fundus interior (away from the optic disc) becomes ~128 after local-mean removal;
     # averaged over a patch because the x4 gain amplifies per-pixel noise.
     patch = out[236:276, 310:350].reshape(-1, 3).mean(axis=0)
     assert np.abs(patch - 128).max() <= 3
 
 
-def test_ben_graham_masks_border() -> None:
-    out = ben_graham(preprocess(synthetic_fundus())[0])
+def test_local_mean_normalise_masks_border() -> None:
+    out = local_mean_normalise(preprocess(synthetic_fundus())[0])
     outside = ~circular_mask(512, 0.9 * 256)
     assert (out[outside] == 128).all()
     assert out.shape == (512, 512, 3)
@@ -113,6 +114,24 @@ def test_jpeg_round_trip_keeps_rgb_order() -> None:
 def test_decode_rejects_garbage() -> None:
     with pytest.raises(ValueError, match="decode"):
         decode_rgb(b"not an image")
+
+
+def test_local_mean_normalise_masks_clipped_edges() -> None:
+    # Disc cut off at top and bottom: the crop pads with black, which must not leave stripes.
+    clipped = synthetic_fundus(width=900, height=400, cx=450, cy=200, radius=300)
+    out = local_mean_normalise(preprocess(clipped)[0])
+    # Fundus spans rows ~85..426 of the 512 crop; 10 % margin = ~26 px inside each cut.
+    assert (out[:105] == 128).all()
+    assert (out[-105:] == 128).all()
+    assert np.abs(out[256, 330].astype(int) - 128).max() < 40  # interior kept, not masked
+
+
+def test_fundus_mask_has_no_holes() -> None:
+    img = synthetic_fundus()
+    cv2.circle(img, (400, 300), 30, (0, 0, 0), thickness=-1)  # very dark macula
+    mask = fundus_mask(img)
+    assert mask[300, 400]
+    assert mask.sum() == pytest.approx(np.pi * 250**2, rel=0.02)
 
 
 def test_circular_mask_area() -> None:

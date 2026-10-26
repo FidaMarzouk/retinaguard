@@ -1,12 +1,11 @@
 """Fundus image preprocessing (PLAN.md §8.1).
 
-Stored images are only cropped to the fundus and resized (``PREPROCESS_VERSION``). Ben Graham
-normalisation is applied on the fly by ``ben_graham`` so one processed dataset serves both arms
-of the with/without ablation. Images are RGB ``uint8`` arrays of shape (H, W, 3).
+Stored images are only cropped to the fundus and resized (``PREPROCESS_VERSION``). Local mean
+normalisation is applied on the fly by ``local_mean_normalise`` so one processed dataset serves
+both arms of the with/without ablation. Images are RGB ``uint8`` arrays of shape (H, W, 3).
 
-Blur width and border mask follow Graham's competition report (see
-``docs/references/graham-2015-kaggle-dr.md``): sigma = fundus radius / 30, and the outer 10 % of
-the fundus is masked to grey to hide the edge ring the blur creates.
+Blur width and border mask follow the 2015 Kaggle DR winning solution: sigma = fundus radius / 30,
+and the outer 10 % of the fundus is masked to grey to hide the edge ring the blur creates.
 """
 
 from dataclasses import dataclass
@@ -24,13 +23,14 @@ PREPROCESS_VERSION = f"crop{DEFAULT_SIZE}_v1"
 JPEG_QUALITY = 95
 
 # A pixel belongs to the fundus if its red channel exceeds this fraction of the image's mean red
-# (Graham uses mean / 10 on the summed channels). Relative, so dark images are still found; the
-# absolute floor keeps JPEG noise in a near-black background from counting as fundus.
+# (the 2015 winning solution uses mean / 10 on the summed channels). Relative, so dark images are
+# still found; the absolute floor keeps JPEG noise in a near-black background from counting as
+# fundus.
 RED_THRESHOLD_FRACTION = 0.1
 RED_THRESHOLD_FLOOR = 10
 MIN_RADIUS_PX = 32
-BEN_GRAHAM_BLUR_DIVISOR = 30
-BEN_GRAHAM_MASK_FRACTION = 0.9
+NORM_BLUR_DIVISOR = 30
+NORM_MASK_FRACTION = 0.9
 GREY = 128
 
 
@@ -51,6 +51,21 @@ def find_fundus(img: Image) -> Circle:
     The radius comes from the region's widest extent, so discs clipped at the top and bottom of
     the frame (common in EyePACS) still get their true radius.
     """
+    x, y, w, h = cv2.boundingRect(_largest_bright_contour(img))
+    radius = max(w, h) / 2
+    if radius < MIN_RADIUS_PX:
+        raise FundusNotFoundError(f"fundus radius {radius:.0f}px below {MIN_RADIUS_PX}px")
+    return Circle(cx=x + w / 2, cy=y + h / 2, radius=radius)
+
+
+def fundus_mask(img: Image) -> npt.NDArray[np.bool_]:
+    """Filled fundus region (largest bright red-channel region, without holes)."""
+    mask = np.zeros(img.shape[:2], dtype=np.uint8)
+    cv2.drawContours(mask, [_largest_bright_contour(img)], -1, 1, thickness=cv2.FILLED)
+    return mask.astype(bool)
+
+
+def _largest_bright_contour(img: Image) -> npt.NDArray[np.int32]:
     _check_rgb(img)
     red = img[:, :, 0].astype(np.float32)
     threshold = max(red.mean() * RED_THRESHOLD_FRACTION, RED_THRESHOLD_FLOOR)
@@ -58,11 +73,7 @@ def find_fundus(img: Image) -> Circle:
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         raise FundusNotFoundError("no bright region in the red channel")
-    x, y, w, h = cv2.boundingRect(max(contours, key=cv2.contourArea))
-    radius = max(w, h) / 2
-    if radius < MIN_RADIUS_PX:
-        raise FundusNotFoundError(f"fundus radius {radius:.0f}px below {MIN_RADIUS_PX}px")
-    return Circle(cx=x + w / 2, cy=y + h / 2, radius=radius)
+    return np.asarray(max(contours, key=cv2.contourArea), dtype=np.int32)
 
 
 def crop_to_fundus(img: Image, circle: Circle) -> Image:
@@ -96,17 +107,24 @@ def circular_mask(size: int, radius: float) -> npt.NDArray[np.bool_]:
     return np.asarray((xx - centre) ** 2 + (yy - centre) ** 2 <= radius**2)
 
 
-def ben_graham(img: Image) -> Image:
+def local_mean_normalise(img: Image) -> Image:
     """Subtract the local mean colour (mapped to grey) and mask the fundus border.
 
     Expects a ``preprocess`` output, where the fundus fills the square (radius = size / 2).
+    Everything within 10 % of the radius of any fundus edge is set to grey: the round edge
+    (the 0.9 x radius circle) and also the straight edges of discs clipped by the camera
+    frame, where the blur would otherwise draw bright and dark stripes.
     """
     _check_rgb(img)
     size = img.shape[0]
     radius = size / 2
-    blurred = cv2.GaussianBlur(img, (0, 0), radius / BEN_GRAHAM_BLUR_DIVISOR)
+    blurred = cv2.GaussianBlur(img, (0, 0), radius / NORM_BLUR_DIVISOR)
     out = np.asarray(cv2.addWeighted(img, 4, blurred, -4, GREY), dtype=np.uint8)
-    out[~circular_mask(size, BEN_GRAHAM_MASK_FRACTION * radius)] = GREY
+    margin = round((1 - NORM_MASK_FRACTION) * radius)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * margin + 1, 2 * margin + 1))
+    inner = cv2.erode(fundus_mask(img).astype(np.uint8), kernel).astype(bool)
+    keep = inner & circular_mask(size, NORM_MASK_FRACTION * radius)
+    out[~keep] = GREY
     return out
 
 
