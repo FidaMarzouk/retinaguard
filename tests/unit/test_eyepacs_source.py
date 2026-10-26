@@ -1,3 +1,5 @@
+import io
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -50,3 +52,39 @@ def test_read_labels_plain_and_zipped(tmp_path: Path, suffix: str) -> None:
     rows = eyepacs.read_labels(path)
 
     assert rows["dr_grade"].tolist() == [1, 3]
+
+
+def _write_split_zip(directory: Path, members: dict[str, bytes], part_size: int) -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zf:
+        for name, payload in members.items():
+            zf.writestr(name, payload)
+    data = buffer.getvalue()
+    for i, start in enumerate(range(0, len(data), part_size), start=1):
+        (directory / f"train.zip.{i:03d}").write_bytes(data[start : start + part_size])
+
+
+def test_kaggle_images_split_zip(tmp_path: Path) -> None:
+    members = {"train/10_left.jpeg": b"a" * 300, "train/10_right.jpeg": b"b" * 300}
+    _write_split_zip(tmp_path, members, part_size=200)
+
+    images = eyepacs.KaggleImages(tmp_path)
+
+    assert images.layout == "split_zip"
+    assert images.names() == {"10_left", "10_right"}
+    assert images.read("eyepacs:10_right") == b"b" * 300
+
+
+def test_kaggle_images_extracted(tmp_path: Path) -> None:
+    (tmp_path / "train").mkdir()
+    (tmp_path / "train" / "13_left.jpeg").write_bytes(b"jpeg")
+
+    images = eyepacs.KaggleImages(tmp_path)
+
+    assert images.layout == "extracted"
+    assert images.read("eyepacs:13_left") == b"jpeg"
+
+
+def test_kaggle_images_missing(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        eyepacs.KaggleImages(tmp_path)

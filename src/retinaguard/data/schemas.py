@@ -55,3 +55,23 @@ class LabelManifestSchema(pa.DataFrameModel):
     class Config:
         strict = True
         ordered = True
+
+
+class ImageManifestSchema(LabelManifestSchema):
+    """Label rows plus the image-derived columns filled by preprocessing.
+
+    Images that failed preprocessing stay in the manifest with null ``phash``/``processed_path``,
+    so failures remain visible downstream instead of silently shrinking the dataset.
+    """
+
+    width: Series[pd.Int64Dtype] = pa.Field(nullable=True, gt=0)
+    height: Series[pd.Int64Dtype] = pa.Field(nullable=True, gt=0)
+    sha256: Series[str] = pa.Field(str_matches=r"^[0-9a-f]{64}$")
+    phash: Series[str] = pa.Field(nullable=True, str_matches=r"^[0-9a-f]{16}$")
+    processed_path: Series[str] = pa.Field(nullable=True)
+    preprocess_version: Series[str]
+
+    @pa.dataframe_check
+    @classmethod
+    def processed_iff_hashed(cls, df: pd.DataFrame) -> "pd.Series[bool]":
+        return df["processed_path"].isna() == df["phash"].isna()

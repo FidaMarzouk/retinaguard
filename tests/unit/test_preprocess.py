@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import pytest
+from fundus_fixtures import synthetic_fundus
 
 from retinaguard.data.preprocess import (
     Circle,
@@ -15,20 +16,6 @@ from retinaguard.data.preprocess import (
     local_mean_normalise,
     preprocess,
 )
-
-FUNDUS_RGB = (180, 90, 40)  # orange-red, like a real fundus
-
-
-def synthetic_fundus(
-    width: int = 800, height: int = 600, cx: int = 400, cy: int = 300, radius: int = 250
-) -> Image:
-    """Orange disc on black with a darker 'optic disc' spot and mild JPEG-like noise."""
-    rng = np.random.default_rng(0)
-    img = np.zeros((height, width, 3), dtype=np.uint8)
-    cv2.circle(img, (cx, cy), radius, FUNDUS_RGB, thickness=-1)
-    cv2.circle(img, (cx - radius // 2, cy), radius // 8, (240, 200, 150), thickness=-1)
-    noise = rng.integers(0, 4, img.shape, dtype=np.uint8)
-    return np.asarray(cv2.add(img, noise), dtype=np.uint8)
 
 
 def test_find_fundus_centred() -> None:
