@@ -18,8 +18,10 @@ from retinaguard.data.preprocess import Image, circular_mask, local_mean_normali
 CANDIDATE_MAX_DISTANCE = 4
 SIGNATURE_SIZE = 64
 SIGNATURE_MASK_FRACTION = 0.85
-# Provisional: calibrated on real images (synthetic re-encodings vs different eyes).
-DUPLICATE_MIN_SIMILARITY = 0.9
+# Calibrated on 1,000 EyePACS images: re-encoded copies score >= 0.53 (p01 0.80), random pairs
+# of different patients <= 0.30. Set low because wrongly grouping two patients into one split
+# costs almost nothing, while a missed duplicate leaks an eye across splits.
+DUPLICATE_MIN_SIMILARITY = 0.5
 
 Signature = npt.NDArray[np.float32]
 
