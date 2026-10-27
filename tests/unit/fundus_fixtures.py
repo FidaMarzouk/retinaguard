@@ -32,3 +32,15 @@ def textured_fundus(seed: int = 0) -> Image:
         centre = tuple(int(v) for v in rng.integers([220, 100], [580, 500]))
         cv2.circle(img, centre, int(rng.integers(3, 14)), (220, 180, 90), thickness=-1)
     return img
+
+
+def lookalike_fundus(seed: int = 0) -> Image:
+    """Same disc and macula layout for every seed; only the faint vessel pattern differs."""
+    rng = np.random.default_rng(seed)
+    img = synthetic_fundus()
+    cv2.circle(img, (430, 300), 40, (120, 50, 20), thickness=-1)
+    for _ in range(40):
+        start = tuple(int(v) for v in rng.integers([200, 80], [600, 520]))
+        end = tuple(int(v) for v in rng.integers([200, 80], [600, 520]))
+        cv2.line(img, start, end, (165, 78, 35), thickness=2)
+    return img

@@ -1,8 +1,8 @@
 """Hard data invariants of the image manifest, as pure functions.
 
 Each check returns the violations it found; an empty result means the invariant holds. The
-same functions back the Dagster asset checks and the unit tests. Invariant 3 (no near-duplicate
-phash across train/eval) lives with the hashing code.
+same functions back the Dagster asset checks and the unit tests. Near-duplicate detection across
+splits lives in ``duplicates``.
 """
 
 import pandas as pd

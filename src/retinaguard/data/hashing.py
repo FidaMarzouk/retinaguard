@@ -1,4 +1,4 @@
-"""Exact (sha256) and perceptual (DCT phash) image hashes for duplicate detection."""
+"""Exact (sha256) and perceptual (DCT phash) image hashes."""
 
 import hashlib
 
@@ -9,8 +9,6 @@ from retinaguard.data.preprocess import Image
 
 PHASH_SIZE = 8  # 8x8 low-frequency DCT block -> 64-bit hash
 PHASH_HIGHFREQ_FACTOR = 4  # DCT computed on a 32x32 downscale
-# Hamming distance at or below which two images count as near-duplicates.
-NEAR_DUPLICATE_MAX_DISTANCE = 4
 
 
 def sha256_hex(data: bytes) -> str:
@@ -21,7 +19,8 @@ def phash(img: Image) -> str:
     """64-bit perceptual hash as 16 hex characters.
 
     Grey 32x32 downscale, 2-D DCT, keep the top-left 8x8 low frequencies, threshold at their
-    median. Robust to resizing, JPEG re-encoding and mild brightness changes.
+    median. Robust to resizing, JPEG re-encoding and mild brightness changes, but too coarse to
+    tell fundus images apart on its own (see ``duplicates``).
     """
     side = PHASH_SIZE * PHASH_HIGHFREQ_FACTOR
     grey = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
