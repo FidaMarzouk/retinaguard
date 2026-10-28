@@ -75,3 +75,9 @@ class ImageManifestSchema(LabelManifestSchema):
     @classmethod
     def processed_iff_hashed(cls, df: pd.DataFrame) -> "pd.Series[bool]":
         return df["processed_path"].isna() == df["phash"].isna()
+
+
+class SplitManifestSchema(ImageManifestSchema):
+    """Image rows with their assigned split."""
+
+    split: Series[str] = pa.Field(isin=SPLITS)

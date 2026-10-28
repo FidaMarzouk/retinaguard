@@ -1,9 +1,10 @@
 """Hard data invariants of the image manifest, as pure functions.
 
 Each check returns the violations it found; an empty result means the invariant holds. The
-same functions back the Dagster asset checks and the unit tests. Near-duplicate detection across
-splits lives in ``duplicates``.
+same functions back the Dagster asset checks and the unit tests.
 """
+
+from collections.abc import Iterable
 
 import pandas as pd
 
@@ -23,6 +24,23 @@ def patients_in_several_splits(manifest: pd.DataFrame) -> list[str]:
     with_patient = manifest.dropna(subset=["patient_id"])
     n_splits = with_patient.groupby("patient_id")["split"].nunique()
     return sorted(n_splits[n_splits > 1].index)
+
+
+def duplicates_across_splits(
+    manifest: pd.DataFrame, duplicate_pairs: Iterable[tuple[str, str]]
+) -> list[str]:
+    """Invariant 3: confirmed near-duplicate images (see ``duplicates``) share a split.
+
+    Stricter than "never between training and evaluation": val and calib are also kept apart,
+    since calibration must not see images the model was tuned on. Pairs with an image missing
+    from the manifest are ignored. Returns ``"a | b: split_a vs split_b"`` entries.
+    """
+    split_of = dict(zip(manifest["image_id"], manifest["split"], strict=True))
+    return sorted(
+        f"{a} | {b}: {split_of[a]} vs {split_of[b]}"
+        for a, b in duplicate_pairs
+        if a in split_of and b in split_of and split_of[a] != split_of[b]
+    )
 
 
 def external_images_in_training(manifest: pd.DataFrame) -> list[str]:

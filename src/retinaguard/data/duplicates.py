@@ -11,6 +11,7 @@ from collections.abc import Sequence
 import cv2
 import numpy as np
 import numpy.typing as npt
+import pandas as pd
 
 from retinaguard.data.preprocess import Image, circular_mask, local_mean_normalise
 
@@ -71,3 +72,11 @@ def structure_similarity(a: Signature, b: Signature) -> float:
 
 def is_duplicate(a: Signature, b: Signature) -> bool:
     return structure_similarity(a, b) >= DUPLICATE_MIN_SIMILARITY
+
+
+def confirmed_pairs(
+    candidates: pd.DataFrame, min_similarity: float = DUPLICATE_MIN_SIMILARITY
+) -> list[tuple[str, str]]:
+    """``(image_id_a, image_id_b)`` of candidate pairs whose structure similarity passes."""
+    kept = candidates[candidates["similarity"] >= min_similarity]
+    return list(zip(kept["image_id_a"], kept["image_id_b"], strict=True))

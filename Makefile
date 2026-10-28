@@ -19,7 +19,7 @@ test:
 	$(UV) run pytest
 
 pipeline:
-	$(UV) run dagster asset materialize --select "*" -m retinaguard.pipeline.definitions
+	$(UV) run python -m retinaguard.pipeline
 
 serve:
 	$(UV) run uvicorn retinaguard.serving.api:app --reload --port 8000
