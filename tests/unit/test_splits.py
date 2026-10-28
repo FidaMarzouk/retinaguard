@@ -7,7 +7,13 @@ from retinaguard.data.invariants import (
     patients_in_several_splits,
     stratification_deviations,
 )
-from retinaguard.data.splits import SPLIT_FRACTIONS, assign_splits, split_groups
+from retinaguard.data.splits import (
+    SPLIT_FRACTIONS,
+    assign_splits,
+    conflicting_groups,
+    external_splits,
+    split_groups,
+)
 
 
 def _manifest(n_patients: int = 4000, seed: int = 0) -> pd.DataFrame:
@@ -80,3 +86,18 @@ def test_duplicates_across_splits_reports_pairs() -> None:
     m = pd.DataFrame({"image_id": ["a", "b", "c"], "split": ["train", "val", "train"]})
     pairs = [("a", "b"), ("a", "c"), ("a", "missing")]
     assert duplicates_across_splits(m, pairs) == ["a | b: train vs val"]
+
+
+def test_external_splits_keep_duplicate_groups() -> None:
+    m = pd.DataFrame(
+        {
+            "image_id": ["aptos:a", "aptos:b", "aptos:c"],
+            "patient_id": [None, None, None],
+            "dr_grade": pd.array([2, 3, 2], dtype="Int64"),
+        }
+    )
+    splits = external_splits(m, [("aptos:a", "aptos:b"), ("aptos:c", "eyepacs:1_left")])
+    assert (splits["split"] == "test_external").all()
+    assert splits["split_group"].tolist() == ["aptos:a", "aptos:a", "aptos:c"]
+    assert conflicting_groups(m, splits["split_group"], "dr_grade") == ["aptos:a"]
+    assert conflicting_groups(m.assign(dr_grade=2), splits["split_group"], "dr_grade") == []

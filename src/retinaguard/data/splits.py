@@ -75,3 +75,23 @@ def assign_splits(
             "split": groups.map(split_of),
         }
     )
+
+
+def external_splits(
+    manifest: pd.DataFrame, duplicate_pairs: Iterable[tuple[str, str]] = ()
+) -> pd.DataFrame:
+    """Like ``assign_splits`` for an external test source: every image is ``test_external``.
+
+    Duplicate groups are still recorded, so evaluation can count each eye once.
+    """
+    groups = split_groups(manifest, duplicate_pairs)
+    return pd.DataFrame(
+        {"image_id": manifest["image_id"], "split_group": groups, "split": "test_external"}
+    )
+
+
+def conflicting_groups(manifest: pd.DataFrame, groups: pd.Series, column: str) -> list[str]:
+    """Groups whose images carry more than one distinct non-null value of ``column``, e.g.
+    duplicates of one eye graded differently."""
+    distinct = manifest[column].groupby(groups.to_numpy()).nunique()
+    return sorted(distinct[distinct > 1].index)
