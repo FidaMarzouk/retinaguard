@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from retinaguard.data.preprocess import PREPROCESS_VERSION
-from retinaguard.data.sources import aptos, eyepacs
+from retinaguard.data.sources import aptos, eyepacs, idrid
 from retinaguard.pipeline.assets import DataPaths, asset_checks, assets
 
 pytestmark = pytest.mark.integration
@@ -25,10 +25,8 @@ def _with_images(labels: pd.DataFrame, offset: int) -> pd.DataFrame:
 
 
 def _candidates(pairs: list[tuple[str, str, float]]) -> pd.DataFrame:
-    a, b, similarity = zip(*pairs, strict=True)
-    return pd.DataFrame(
-        {"image_id_a": a, "image_id_b": b, "phash_distance": 2, "similarity": similarity}
-    )
+    frame = pd.DataFrame(pairs, columns=["image_id_a", "image_id_b", "similarity"])
+    return frame.assign(phash_distance=2)
 
 
 def _interim(root: Path, aptos_pairs: list[tuple[str, str, float]], n_patients: int = 3000) -> None:
@@ -51,9 +49,17 @@ def _interim(root: Path, aptos_pairs: list[tuple[str, str, float]], n_patients: 
         aptos.rows_from_labels(pd.DataFrame({"id_code": codes, "diagnosis": aptos_grades})),
         len(names),
     )
+    idrid_labels = pd.DataFrame(
+        {"Image name": [f"IDRiD_{i:03d}" for i in range(1, 21)], "Retinopathy grade": "2"}
+    )
+    idrid_manifest = _with_images(
+        idrid.rows_from_labels(idrid_labels.assign(subset="training")), len(names) + 200
+    )
+    idrid_candidates = _candidates([("idrid:training_IDRiD_001", "aptos:000000000004", 0.2)])
     for source, manifest, candidates_name, candidates in (
         ("eyepacs", eyepacs_manifest, "duplicate_candidates", eyepacs_candidates),
         ("aptos", aptos_manifest, "aptos_duplicate_candidates", _candidates(aptos_pairs)),
+        ("idrid", idrid_manifest, "idrid_duplicate_candidates", idrid_candidates),
     ):
         interim = root / "interim" / source
         interim.mkdir(parents=True)
@@ -86,7 +92,7 @@ def test_pipeline_writes_splits_and_checks_pass(tmp_path: Path) -> None:
     aptos_splits = pd.read_parquet(tmp_path / "splits" / "aptos.parquet")
     assert len(eyepacs_splits) == 6000
     assert len(aptos_splits) == 200
-    assert len(manifest) == 6200
+    assert len(manifest) == 6220
 
     split_of = dict(zip(manifest["image_id"], manifest["split"], strict=True))
     assert split_of["eyepacs:0_left"] == split_of["eyepacs:1_right"]  # duplicate pair joined
@@ -94,7 +100,9 @@ def test_pipeline_writes_splits_and_checks_pass(tmp_path: Path) -> None:
     groups = dict(zip(eyepacs_splits["image_id"], eyepacs_splits["split_group"], strict=True))
     assert groups["eyepacs:4_left"] != groups["eyepacs:5_left"]  # below the threshold
 
-    assert (manifest.loc[manifest["source"] == "aptos", "split"] == "test_external").all()
+    external = manifest["source"].isin(["aptos", "idrid"])
+    assert (manifest.loc[external, "split"] == "test_external").all()
+    assert (tmp_path / "splits" / "idrid.parquet").exists()
     aptos_groups = aptos_splits.set_index("image_id")["split_group"]
     assert aptos_groups["aptos:000000000001"] == "aptos:000000000000"
     assert aptos_splits["split_group"].nunique() == 198

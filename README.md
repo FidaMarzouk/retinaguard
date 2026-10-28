@@ -66,7 +66,7 @@ versioned with DVC. Each dataset is obtained separately under its own terms:
 | EyeQ | Image quality labels | Labels on GitHub (HzFu/EyeQ); images from EyePACS |
 | APTOS 2019 | External test (India) | Kaggle competition rules |
 | Messidor-2 | External test (France) | ADCIS research licence |
-| IDRiD | Lesion segmentation, external test (India) | CC BY 4.0 |
+| IDRiD (Porwal et al., IEEE DataPort, [doi:10.21227/H25W98](https://doi.org/10.21227/H25W98)) | Lesion segmentation, external test (India) | CC BY 4.0 |
 | DDR | Lesion segmentation, external test (China) | CC BY 4.0 (as published by the authors) |
 
 Only IDRiD images (CC BY 4.0, attributed) may appear in tests or the public demo.
