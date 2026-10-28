@@ -8,12 +8,14 @@ from fundus_fixtures import synthetic_fundus
 
 from retinaguard.data.preprocess import PREPROCESS_VERSION, decode_rgb, encode_jpeg
 from retinaguard.data.processing import (
+    ProcessedImages,
     attach_records,
     build_shard,
     member_name,
     process_bytes,
     processed_path,
     shard_ids,
+    shard_roots,
     split_processed_path,
 )
 from retinaguard.data.sources import eyepacs
@@ -121,3 +123,19 @@ def test_manifest_rejects_path_without_hash(tmp_path: Path) -> None:
     records.loc[0, "phash"] = None
     with pytest.raises(pandera.errors.SchemaError, match="processed_iff_hashed"):
         attach_records(_labels(), records)
+
+
+def test_processed_images_reads_across_shard_folders(tmp_path: Path) -> None:
+    first, second = tmp_path / "a", tmp_path / "b"
+    build_shard(first, "eyepacs_000.zip", ["eyepacs:1_left"], lambda _: GOOD)
+    build_shard(second, "aptos_000.zip", ["aptos:000c1434d8d7"], lambda _: GOOD)
+    paths = {
+        "eyepacs:1_left": processed_path("eyepacs_000.zip", "1_left.jpg"),
+        "aptos:000c1434d8d7": processed_path("aptos_000.zip", "000c1434d8d7.jpg"),
+    }
+
+    images = ProcessedImages(paths, shard_roots(first, second))
+
+    assert images.read("eyepacs:1_left").shape == (512, 512, 3)
+    assert images.read("aptos:000c1434d8d7").shape == (512, 512, 3)
+    images.close()

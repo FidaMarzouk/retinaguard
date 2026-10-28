@@ -47,9 +47,10 @@ class LabelManifestSchema(pa.DataFrameModel):
     @classmethod
     def ids_prefixed_by_source(cls, df: pd.DataFrame) -> "pd.Series[bool]":
         id_ok = df["image_id"].str.split(":", n=1).str[0] == df["source"]
+        # astype: an all-null column may come back as float, without the .str accessor.
         patient_ok = df["patient_id"].isna() | (
-            df["patient_id"].str.split(":", n=1).str[0] == df["source"]
-        )
+            df["patient_id"].astype("string").str.split(":", n=1).str[0] == df["source"]
+        ).fillna(False)
         return id_ok & patient_ok
 
     class Config:

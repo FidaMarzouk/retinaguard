@@ -11,7 +11,7 @@ data root.
 
 import os
 import zipfile
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -21,6 +21,7 @@ from retinaguard.data.hashing import phash, sha256_hex
 from retinaguard.data.preprocess import (
     DEFAULT_SIZE,
     PREPROCESS_VERSION,
+    Image,
     decode_rgb,
     encode_jpeg,
     preprocess,
@@ -146,3 +147,32 @@ def build_shard(
     os.replace(tmp_path, shard_path)
     os.replace(records_path.with_suffix(".tmp"), records_path)
     return frame
+
+
+class ProcessedImages:
+    """Read processed images by ``image_id`` from shard folders, keeping each shard open.
+
+    ``processed_paths`` maps image ids to ``processed_path``; ``roots`` maps each shard file name
+    to the folder holding it, so shards of several datasets can be read together.
+    """
+
+    def __init__(self, processed_paths: Mapping[str, str], roots: Mapping[str, Path]) -> None:
+        self._paths = processed_paths
+        self._roots = roots
+        self._open: dict[str, zipfile.ZipFile] = {}
+
+    def read(self, image_id: str) -> Image:
+        shard_file, member = split_processed_path(self._paths[image_id])
+        if shard_file not in self._open:
+            self._open[shard_file] = zipfile.ZipFile(self._roots[shard_file] / shard_file)
+        return decode_rgb(self._open[shard_file].read(member))
+
+    def close(self) -> None:
+        for archive in self._open.values():
+            archive.close()
+        self._open.clear()
+
+
+def shard_roots(*folders: Path) -> dict[str, Path]:
+    """Shard file name → folder, for every ``*.zip`` in ``folders``."""
+    return {p.name: folder for folder in folders for p in sorted(folder.glob("*.zip"))}

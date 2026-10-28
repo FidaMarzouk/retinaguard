@@ -1,12 +1,16 @@
 import cv2
 import numpy as np
+import pandas as pd
 import pytest
 from fundus_fixtures import lookalike_fundus, textured_fundus
 
 from retinaguard.data.duplicates import (
     DUPLICATE_MIN_SIMILARITY,
+    candidate_frame,
     candidate_pairs,
+    confirmed_pairs,
     is_duplicate,
+    score_candidates,
     structure_signature,
     structure_similarity,
 )
@@ -73,3 +77,29 @@ def test_different_images_are_not_duplicates() -> None:
 def test_shared_layout_alone_scores_below_copies() -> None:
     a, b = _signature(lookalike_fundus(seed=0)), _signature(lookalike_fundus(seed=1))
     assert structure_similarity(a, b) < 0.9
+
+
+def test_candidate_frame_with_distances_and_source_filter() -> None:
+    ids = ["eyepacs:1_left", "eyepacs:2_left", "aptos:a", "aptos:b"]
+    hashes = ["0000000000000000", "0000000000000001", "0000000000000003", "ffffffffffffffff"]
+
+    frame = candidate_frame(ids, hashes, max_distance=2)
+    assert frame.to_dict("list") == {
+        "image_id_a": ["eyepacs:1_left", "eyepacs:1_left", "eyepacs:2_left"],
+        "image_id_b": ["eyepacs:2_left", "aptos:a", "aptos:a"],
+        "phash_distance": [1, 2, 1],
+    }
+    only_aptos = candidate_frame(ids, hashes, max_distance=2, involving="aptos")
+    assert only_aptos["image_id_b"].tolist() == ["aptos:a", "aptos:a"]
+
+
+def test_score_candidates() -> None:
+    signatures = {
+        "x": _signature(textured_fundus(seed=0)),
+        "y": _signature(textured_fundus(seed=1)),
+    }
+    pairs = pd.DataFrame({"image_id_a": ["x", "x"], "image_id_b": ["x", "y"]})
+    scored = score_candidates(pairs, signatures.__getitem__)
+    assert scored["similarity"].iloc[0] == pytest.approx(1.0, abs=1e-5)
+    assert scored["similarity"].iloc[1] < DUPLICATE_MIN_SIMILARITY
+    assert confirmed_pairs(scored) == [("x", "x")]

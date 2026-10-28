@@ -6,7 +6,7 @@ to propose candidate pairs; a pair counts as a duplicate when the fine structure
 lesions) also matches, measured by ``structure_similarity``.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import cv2
 import numpy as np
@@ -48,6 +48,46 @@ def candidate_pairs(
         keep = i < j
         found.append(np.stack([i[keep] + start, j[keep] + start], axis=1).astype(np.int64))
     return np.concatenate(found)
+
+
+def candidate_frame(
+    image_ids: Sequence[str],
+    hashes: Sequence[str],
+    max_distance: int = CANDIDATE_MAX_DISTANCE,
+    involving: str | None = None,
+) -> pd.DataFrame:
+    """Candidate pairs as ``image_id_a``, ``image_id_b``, ``phash_distance``.
+
+    With ``involving`` (a source prefix such as ``"aptos"``), only pairs with at least one image
+    of that source are kept, e.g. to compare a new dataset against itself and earlier ones.
+    """
+    pairs = candidate_pairs(hashes, max_distance)
+    ids = np.asarray(image_ids, dtype=object)
+    values = hash_values(hashes)
+    xor = values[pairs[:, 0]] ^ values[pairs[:, 1]]
+    frame = pd.DataFrame(
+        {
+            "image_id_a": ids[pairs[:, 0]].astype(str),
+            "image_id_b": ids[pairs[:, 1]].astype(str),
+            "phash_distance": _POPCOUNT8[xor.view(np.uint8)].reshape(-1, 8).sum(axis=1),
+        }
+    )
+    if involving is not None:
+        prefix = f"{involving}:"
+        a_new, b_new = (frame[col].str.startswith(prefix) for col in ("image_id_a", "image_id_b"))
+        frame = frame[a_new | b_new].reset_index(drop=True)
+    return frame
+
+
+def score_candidates(
+    candidates: pd.DataFrame, signature_of: Callable[[str], Signature]
+) -> pd.DataFrame:
+    """Add ``similarity`` to candidate pairs; ``signature_of`` should cache per image."""
+    similarity = [
+        structure_similarity(signature_of(a), signature_of(b))
+        for a, b in zip(candidates["image_id_a"], candidates["image_id_b"], strict=True)
+    ]
+    return candidates.assign(similarity=similarity)
 
 
 def structure_signature(img: Image) -> Signature:
