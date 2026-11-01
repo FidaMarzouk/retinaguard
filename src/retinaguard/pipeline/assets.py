@@ -5,6 +5,7 @@ Images are preprocessed and near-duplicate candidates scored in Kaggle notebooks
 outputs are placed under ``data/interim/{source}/``:
 
 - EyePACS: ``manifest_eyepacs.parquet``, ``duplicate_candidates.parquet``
+- EyeQ: ``Label_EyeQ_train.csv``, ``Label_EyeQ_test.csv`` (quality labels for EyePACS images)
 - each external test source (``EXTERNAL_TEST_SOURCES``): ``manifest_{source}.parquet`` and
   ``{source}_duplicate_candidates.parquet``, with pairs within the source and against every source
   processed before it
@@ -20,6 +21,7 @@ import pandas as pd
 from retinaguard.data import invariants
 from retinaguard.data.duplicates import DUPLICATE_MIN_SIMILARITY, confirmed_pairs
 from retinaguard.data.schemas import ImageManifestSchema, SplitManifestSchema
+from retinaguard.data.sources import eyeq
 from retinaguard.data.splits import (
     SPLIT_SEED,
     assign_splits,
@@ -65,10 +67,34 @@ def _pairs(frame: pd.DataFrame) -> list[tuple[str, str]]:
 
 
 @dg.asset(group_name="eyepacs")
-def eyepacs_manifest(data: DataPaths) -> pd.DataFrame:
-    """Labels plus image columns from the preprocessing notebook, schema-validated."""
+def eyeq_labels(context: dg.AssetExecutionContext, data: DataPaths) -> pd.DataFrame:
+    """EyeQ quality labels (good / usable / reject), keyed by EyePACS ``image_id``."""
+    labels = eyeq.read_labels(data.interim("eyeq"))
+    context.add_output_metadata(
+        {"labels": labels.groupby(["eyeq_subset", "quality_label"]).size().to_string()}
+    )
+    return labels
+
+
+@dg.asset(group_name="eyepacs")
+def eyepacs_manifest(
+    context: dg.AssetExecutionContext, data: DataPaths, eyeq_labels: pd.DataFrame
+) -> pd.DataFrame:
+    """Labels plus image columns from the preprocessing notebook and EyeQ quality labels,
+    schema-validated."""
     manifest = pd.read_parquet(data.interim("eyepacs") / "manifest_eyepacs.parquet")
-    return ImageManifestSchema.validate(manifest)
+    manifest = ImageManifestSchema.validate(eyeq.attach_quality(manifest, eyeq_labels))
+    matched = eyeq_labels["image_id"].isin(manifest["image_id"])
+    context.add_output_metadata(
+        {
+            "quality_labels": manifest["quality_label"].value_counts().to_dict(),
+            "eyeq_labels_matched": eyeq_labels[matched]["eyeq_subset"].value_counts().to_dict(),
+            "eyeq_labels_without_image": eyeq_labels[~matched]["eyeq_subset"]
+            .value_counts()
+            .to_dict(),
+        }
+    )
+    return manifest
 
 
 @dg.asset(group_name="eyepacs")
@@ -220,6 +246,7 @@ def stratified_by_grade(manifest: pd.DataFrame) -> dg.AssetCheckResult:
 
 
 assets = [
+    eyeq_labels,
     eyepacs_manifest,
     eyepacs_duplicate_pairs,
     eyepacs_splits,

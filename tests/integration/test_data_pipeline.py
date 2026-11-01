@@ -65,6 +65,16 @@ def _interim(root: Path, aptos_pairs: list[tuple[str, str, float]], n_patients: 
         interim.mkdir(parents=True)
         manifest.to_parquet(interim / f"manifest_{source}.parquet", index=False)
         candidates.to_parquet(interim / f"{candidates_name}.parquet", index=False)
+    # EyeQ: quality for the first 100 EyePACS images; its test file covers images not processed.
+    eyeq_dir = root / "interim" / "eyeq"
+    eyeq_dir.mkdir()
+    quality = pd.DataFrame(
+        {"image": [f"{n}.jpeg" for n in names[:100]], "quality": "2", "DR_grade": grades[:100]}
+    )
+    quality.to_csv(eyeq_dir / "Label_EyeQ_train.csv")
+    pd.DataFrame({"image": ["99999_left.jpeg"], "quality": "0", "DR_grade": "0"}).to_csv(
+        eyeq_dir / "Label_EyeQ_test.csv"
+    )
 
 
 def _materialize(root: Path) -> dg.ExecuteInProcessResult:
@@ -103,6 +113,7 @@ def test_pipeline_writes_splits_and_checks_pass(tmp_path: Path) -> None:
     external = manifest["source"].isin(["aptos", "idrid"])
     assert (manifest.loc[external, "split"] == "test_external").all()
     assert (tmp_path / "splits" / "idrid.parquet").exists()
+    assert manifest["quality_label"].value_counts().to_dict() == {"reject": 100}
     aptos_groups = aptos_splits.set_index("image_id")["split_group"]
     assert aptos_groups["aptos:000000000001"] == "aptos:000000000000"
     assert aptos_splits["split_group"].nunique() == 198

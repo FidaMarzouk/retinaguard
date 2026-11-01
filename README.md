@@ -70,3 +70,5 @@ versioned with DVC. Each dataset is obtained separately under its own terms:
 | DDR | Lesion segmentation, external test (China) | CC BY 4.0 (as published by the authors) |
 
 Only IDRiD images (CC BY 4.0, attributed) may appear in tests or the public demo.
+`tests/fixtures/idrid/` holds four IDRiD disease grading training images (IDRiD_005, 016, 138,
+139), downscaled from 4288×2848 to 1072×712 and re-encoded as JPEG.
