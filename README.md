@@ -18,7 +18,7 @@ Pipeline: image quality gate → calibrated DR grader → out-of-distribution ch
 deferral policy → lesion overlays → drift monitoring. Any error in the chain returns
 `DEFER_TO_HUMAN`, never `NO_REFER`.
 
-Models are trained on EyePACS and evaluated per site on external datasets (India, France, China),
+Models are trained on EyePACS and evaluated per site on external datasets (India, China),
 with bootstrap 95% confidence intervals.
 
 ## Results
@@ -65,9 +65,8 @@ versioned with DVC. Each dataset is obtained separately under its own terms:
 | EyePACS (Kaggle Diabetic Retinopathy Detection, 2015) | Training, internal test | Kaggle competition rules |
 | EyeQ | Image quality labels | Labels on GitHub (HzFu/EyeQ); images from EyePACS |
 | APTOS 2019 | External test (India) | Kaggle competition rules |
-| Messidor-2 | External test (France) | ADCIS research licence |
 | IDRiD (Porwal et al., IEEE DataPort, [doi:10.21227/H25W98](https://doi.org/10.21227/H25W98)) | Lesion segmentation, external test (India) | CC BY 4.0 |
-| DDR | Lesion segmentation, external test (China) | CC BY 4.0 (as published by the authors) |
+| DDR (Li et al., Information Sciences 2019, [doi:10.1016/j.ins.2019.06.011](https://doi.org/10.1016/j.ins.2019.06.011)) | Lesion segmentation, external test (China) | CC BY-NC-SA 4.0 |
 
 Only IDRiD images (CC BY 4.0, attributed) may appear in tests or the public demo.
 `tests/fixtures/idrid/` holds four IDRiD disease grading training images (IDRiD_005, 016, 138,

@@ -11,14 +11,14 @@ from pandera.typing import Series
 
 from retinaguard.data.labels import ICDR_GRADES, REFERABLE_MIN_GRADE
 
-SOURCES = ("eyepacs", "eyeq", "aptos", "messidor2", "idrid", "ddr")
-SITE_COUNTRIES = ("US", "IN", "FR", "CN")
+SOURCES = ("eyepacs", "aptos", "idrid", "ddr")
+SITE_COUNTRIES = ("US", "IN", "CN")
 EYES = ("left", "right")
 QUALITY_LABELS = ("good", "usable", "reject")
 SPLITS = ("train", "val", "calib", "test_internal", "test_external")
 
 # Grading sources used only for external testing (see ``invariants.external_images_in_training``).
-EXTERNAL_SOURCES = ("aptos", "messidor2", "idrid", "ddr")
+EXTERNAL_SOURCES = ("aptos", "idrid", "ddr")
 TRAINING_SPLITS = ("train", "val", "calib")
 
 

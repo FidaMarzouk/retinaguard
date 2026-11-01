@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from retinaguard.data.preprocess import PREPROCESS_VERSION
-from retinaguard.data.sources import aptos, eyepacs, idrid
+from retinaguard.data.sources import aptos, ddr, eyepacs, idrid
 from retinaguard.pipeline.assets import DataPaths, asset_checks, assets
 
 pytestmark = pytest.mark.integration
@@ -56,10 +56,16 @@ def _interim(root: Path, aptos_pairs: list[tuple[str, str, float]], n_patients: 
         idrid.rows_from_labels(idrid_labels.assign(subset="training")), len(names) + 200
     )
     idrid_candidates = _candidates([("idrid:training_IDRiD_001", "aptos:000000000004", 0.2)])
+    ddr_text = "".join(f"2017{i:04d}.jpg {i % 6}\n" for i in range(30))  # grade 5: ungradable
+    ddr_manifest = _with_images(
+        ddr.rows_from_labels(ddr.parse_label_file(ddr_text, "test")), len(names) + 220
+    )
+    ddr_candidates = _candidates([("ddr:test_20170000", "ddr:test_20170006", 0.99)])
     for source, manifest, candidates_name, candidates in (
         ("eyepacs", eyepacs_manifest, "duplicate_candidates", eyepacs_candidates),
         ("aptos", aptos_manifest, "aptos_duplicate_candidates", _candidates(aptos_pairs)),
         ("idrid", idrid_manifest, "idrid_duplicate_candidates", idrid_candidates),
+        ("ddr", ddr_manifest, "ddr_duplicate_candidates", ddr_candidates),
     ):
         interim = root / "interim" / source
         interim.mkdir(parents=True)
@@ -102,7 +108,7 @@ def test_pipeline_writes_splits_and_checks_pass(tmp_path: Path) -> None:
     aptos_splits = pd.read_parquet(tmp_path / "splits" / "aptos.parquet")
     assert len(eyepacs_splits) == 6000
     assert len(aptos_splits) == 200
-    assert len(manifest) == 6220
+    assert len(manifest) == 6250
 
     split_of = dict(zip(manifest["image_id"], manifest["split"], strict=True))
     assert split_of["eyepacs:0_left"] == split_of["eyepacs:1_right"]  # duplicate pair joined
@@ -110,10 +116,13 @@ def test_pipeline_writes_splits_and_checks_pass(tmp_path: Path) -> None:
     groups = dict(zip(eyepacs_splits["image_id"], eyepacs_splits["split_group"], strict=True))
     assert groups["eyepacs:4_left"] != groups["eyepacs:5_left"]  # below the threshold
 
-    external = manifest["source"].isin(["aptos", "idrid"])
+    external = manifest["source"].isin(["aptos", "idrid", "ddr"])
     assert (manifest.loc[external, "split"] == "test_external").all()
     assert (tmp_path / "splits" / "idrid.parquet").exists()
-    assert manifest["quality_label"].value_counts().to_dict() == {"reject": 100}
+    quality = manifest.groupby("source")["quality_label"].value_counts().to_dict()
+    assert quality == {("eyepacs", "reject"): 100, ("ddr", "reject"): 5}
+    ddr_groups = pd.read_parquet(tmp_path / "splits" / "ddr.parquet")["split_group"]
+    assert ddr_groups.nunique() == 29
     aptos_groups = aptos_splits.set_index("image_id")["split_group"]
     assert aptos_groups["aptos:000000000001"] == "aptos:000000000000"
     assert aptos_splits["split_group"].nunique() == 198

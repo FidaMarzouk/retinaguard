@@ -130,7 +130,7 @@ def eyepacs_splits(
 
 
 # Processing order: each source's duplicate candidates cover the sources before it.
-EXTERNAL_TEST_SOURCES = ("aptos", "idrid")
+EXTERNAL_TEST_SOURCES = ("aptos", "idrid", "ddr")
 
 
 def _external_source(source: str) -> list[dg.AssetsDefinition]:
