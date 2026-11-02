@@ -26,6 +26,8 @@ from retinaguard.data.schemas import LabelManifestSchema
 SOURCE = "ddr"
 SITE_COUNTRY = "CN"
 SUBSETS = ("train", "valid", "test")
+# Labelled images per subset in the official release (ungradable included), to check copies.
+SUBSET_SIZES = {"train": 6835, "valid": 2733, "test": 4105}
 UNGRADABLE = "5"
 GRADING_DIR = "DR_grading"
 _LINE = re.compile(r"^(?P<name>\S+\.jpg)\s+(?P<grade>\d)$")
