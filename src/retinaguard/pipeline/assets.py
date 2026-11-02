@@ -115,7 +115,9 @@ def eyepacs_splits(
     """Manifest with a patient-level, grade-stratified split; writes the frozen split file."""
     splits = assign_splits(eyepacs_manifest, _pairs(eyepacs_duplicate_pairs))
     manifest = SplitManifestSchema.validate(
-        eyepacs_manifest.assign(split=splits["split"].to_numpy())
+        eyepacs_manifest.assign(
+            split_group=splits["split_group"].to_numpy(), split=splits["split"].to_numpy()
+        )
     )
     _write(data.splits_file("eyepacs"), splits)
     context.add_output_metadata(
@@ -163,7 +165,11 @@ def _external_source(source: str) -> list[dg.AssetsDefinition]:
     ) -> pd.DataFrame:
         """Manifest with every image in ``test_external``; duplicates of one eye share a group."""
         frame = external_splits(labels, _pairs(pairs))
-        manifest = SplitManifestSchema.validate(labels.assign(split=frame["split"].to_numpy()))
+        manifest = SplitManifestSchema.validate(
+            labels.assign(
+                split_group=frame["split_group"].to_numpy(), split=frame["split"].to_numpy()
+            )
+        )
         _write(data.splits_file(source), frame)
         groups = frame["split_group"]
         group_sizes = groups.value_counts()

@@ -12,6 +12,7 @@ from retinaguard.data.splits import (
     assign_splits,
     conflicting_groups,
     external_splits,
+    one_image_per_group,
     split_groups,
 )
 
@@ -101,3 +102,17 @@ def test_external_splits_keep_duplicate_groups() -> None:
     assert splits["split_group"].tolist() == ["aptos:a", "aptos:a", "aptos:c"]
     assert conflicting_groups(m, splits["split_group"], "dr_grade") == ["aptos:a"]
     assert conflicting_groups(m.assign(dr_grade=2), splits["split_group"], "dr_grade") == []
+
+
+def test_one_image_per_group() -> None:
+    m = pd.DataFrame(
+        {
+            "image_id": ["ddr:a", "ddr:b", "ddr:c", "ddr:d", "ddr:e", "ddr:f"],
+            "split_group": ["ddr:a", "ddr:a", "ddr:c", "ddr:c", "ddr:e", "ddr:f"],
+            "referable": pd.array([True, True, False, True, None, False], dtype="boolean"),
+            "processed_path": [None, "b.jpg", "c.jpg", "d.jpg", "e.jpg", "f.jpg"],
+        }
+    )
+    kept = one_image_per_group(m)
+    # a: failed image skipped; c: referable conflict dropped; e: ungradable kept
+    assert kept["image_id"].tolist() == ["ddr:b", "ddr:e", "ddr:f"]

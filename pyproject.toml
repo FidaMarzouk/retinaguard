@@ -41,6 +41,9 @@ dev = [
     "pre-commit>=3.8",
     "dvc>=3.55",
     "pandas-stubs>=3.0.5.260914",
+    "matplotlib>=3.9",
+    "nbconvert>=7.16",
+    "ipykernel>=6.29",
 ]
 
 [build-system]

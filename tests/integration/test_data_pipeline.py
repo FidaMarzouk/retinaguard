@@ -126,6 +126,13 @@ def test_pipeline_writes_splits_and_checks_pass(tmp_path: Path) -> None:
     aptos_groups = aptos_splits.set_index("image_id")["split_group"]
     assert aptos_groups["aptos:000000000001"] == "aptos:000000000000"
     assert aptos_splits["split_group"].nunique() == 198
+    split_files = pd.concat(
+        pd.read_parquet(tmp_path / "splits" / f"{s}.parquet")
+        for s in ("eyepacs", "aptos", "idrid", "ddr")
+    )
+    assert dict(zip(manifest["image_id"], manifest["split_group"], strict=True)) == dict(
+        zip(split_files["image_id"], split_files["split_group"], strict=True)
+    )
 
     metadata = result.asset_materializations_for_node("aptos_splits")[0].metadata
     assert metadata["duplicate_groups"].value == 2

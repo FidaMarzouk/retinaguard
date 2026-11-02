@@ -1,6 +1,6 @@
 outs:
-- md5: cd092a53f89c5dc3bc569d3b645d22b9.dir
-  size: 5678771
+- md5: 284ff3c2bafa95bf28e3403dfcd279af.dir
+  size: 6007917
   nfiles: 1
   hash: md5
   path: manifests

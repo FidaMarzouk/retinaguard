@@ -79,6 +79,8 @@ class ImageManifestSchema(LabelManifestSchema):
 
 
 class SplitManifestSchema(ImageManifestSchema):
-    """Image rows with their assigned split."""
+    """Image rows with their assigned split; images of one patient or one duplicate group share
+    a ``split_group``."""
 
+    split_group: Series[str]
     split: Series[str] = pa.Field(isin=SPLITS)

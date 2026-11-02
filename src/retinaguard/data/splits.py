@@ -95,3 +95,19 @@ def conflicting_groups(manifest: pd.DataFrame, groups: pd.Series, column: str) -
     duplicates of one eye graded differently."""
     distinct = manifest[column].groupby(groups.to_numpy()).nunique()
     return sorted(distinct[distinct > 1].index)
+
+
+def one_image_per_group(manifest: pd.DataFrame) -> pd.DataFrame:
+    """Evaluation rows: one image per ``split_group``, so a duplicated eye counts once.
+
+    The kept image is the group's first processed one by ``image_id`` (the first overall if none
+    was processed). Groups whose images disagree on ``referable`` are dropped, since the eye has no
+    single reference label.
+    """
+    groups = manifest["split_group"]
+    ambiguous = conflicting_groups(manifest, groups, "referable")
+    order = manifest.assign(_failed=manifest["processed_path"].isna()).sort_values(
+        ["_failed", "image_id"]
+    )
+    kept = order[~order["split_group"].isin(ambiguous)].drop_duplicates("split_group")
+    return kept.drop(columns="_failed").sort_index()
