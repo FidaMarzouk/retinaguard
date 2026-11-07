@@ -113,7 +113,9 @@ def local_mean_normalise(img: Image) -> Image:
     Expects a ``preprocess`` output, where the fundus fills the square (radius = size / 2).
     Everything within 10 % of the radius of any fundus edge is set to grey: the round edge
     (the 0.9 x radius circle) and also the straight edges of discs clipped by the camera
-    frame, where the blur would otherwise draw bright and dark stripes.
+    frame, where the blur would otherwise draw bright and dark stripes. In a near-black image
+    (or one darkened by augmentation) no fundus edge can be found; the disc is then assumed to
+    fill the square, as ``preprocess`` guarantees, instead of failing.
     """
     _check_rgb(img)
     size = img.shape[0]
@@ -122,7 +124,11 @@ def local_mean_normalise(img: Image) -> Image:
     out = np.asarray(cv2.addWeighted(img, 4, blurred, -4, GREY), dtype=np.uint8)
     margin = round((1 - NORM_MASK_FRACTION) * radius)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * margin + 1, 2 * margin + 1))
-    inner = cv2.erode(fundus_mask(img).astype(np.uint8), kernel).astype(bool)
+    try:
+        fundus = fundus_mask(img)
+    except FundusNotFoundError:
+        fundus = circular_mask(size, radius)
+    inner = cv2.erode(fundus.astype(np.uint8), kernel).astype(bool)
     keep = inner & circular_mask(size, NORM_MASK_FRACTION * radius)
     out[~keep] = GREY
     return out

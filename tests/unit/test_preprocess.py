@@ -90,6 +90,15 @@ def test_local_mean_normalise_masks_border() -> None:
     assert out.shape == (512, 512, 3)
 
 
+def test_local_mean_normalise_near_black_image() -> None:
+    # e.g. a dark processed image further darkened by augmentation: no fundus edge to find
+    img = np.full((512, 512, 3), 3, dtype=np.uint8)
+    with pytest.raises(FundusNotFoundError):
+        fundus_mask(img)
+    out = local_mean_normalise(img)
+    assert (out[~circular_mask(512, 0.9 * 256)] == 128).all()
+
+
 def test_jpeg_round_trip_keeps_rgb_order() -> None:
     img = np.zeros((64, 64, 3), np.uint8)
     img[..., 0] = 200  # pure red must stay in channel 0
