@@ -1,0 +1,4 @@
+name: convnext_tiny
+timm_name: convnext_tiny.fb_in22k_ft_in1k
+pretrained: true
+drop_path_rate: 0.1

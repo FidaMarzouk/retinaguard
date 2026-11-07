@@ -40,6 +40,15 @@ make down
 Heavy preprocessing and training run as Kaggle notebooks (`notebooks/kaggle/`), which install
 this package from GitHub.
 
+Training is configured with Hydra (`configs/`) and can also run locally:
+
+```bash
+uv run python -m retinaguard.train.train_grader model=efficientnet_b3 "data.shard_dirs=[path/to/shards]"
+```
+
+A run directory keeps `last.pt` after every epoch; rerunning the same command continues where a
+stopped run left off.
+
 ## Repository layout
 
 ```

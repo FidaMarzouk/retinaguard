@@ -1,0 +1,31 @@
+# @package _global_
+# DR grader: one backbone with a 5-class ICDR grade head and a binary referable head.
+defaults:
+  - /model: convnext_tiny
+  - _self_
+
+run_name: grader-${model.name}
+output_dir: null  # null: /kaggle/working/runs on Kaggle, ./outputs/runs elsewhere
+seed: 0
+
+data:
+  manifest: data/manifests/manifest.parquet
+  shard_dirs: []  # folders holding the processed image shards (*.zip)
+  image_size: 512
+  local_mean_norm: true
+  exclude_quality_reject: true  # EyeQ rejects are not used for training or model selection
+  limit_per_split: null  # cap on images per split, for smoke tests
+
+train:
+  epochs: 20
+  batch_size: 24
+  lr: 2.0e-4
+  weight_decay: 0.05
+  warmup_epochs: 1
+  amp: true  # mixed precision, GPU only
+  num_workers: 4
+  patience: 5  # epochs without a better validation referable AUROC before stopping
+  imbalance: none  # none | sampler (inverse square-root grade frequency) | focal
+  focal_gamma: 2.0
+  referable_loss_weight: 1.0
+  device: auto  # auto | cpu | cuda
