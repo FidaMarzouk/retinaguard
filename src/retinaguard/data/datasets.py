@@ -94,7 +94,8 @@ class FundusDataset(Dataset[tuple[torch.Tensor, int, float]]):
         augment: A.Compose | None = None,
     ) -> None:
         self.image_ids: list[str] = rows["image_id"].tolist()
-        self.grades = rows["dr_grade"].astype(int).to_numpy()
+        # Ungraded images (DDR "ungradable") get grade -1; they are predicted, never trained on.
+        self.grades = rows["dr_grade"].astype("Int64").fillna(-1).astype(int).to_numpy()
         self.referable = (self.grades >= 2).astype(np.float32)
         self._paths = dict(zip(rows["image_id"], rows["processed_path"], strict=True))
         self._roots = shard_roots(*shard_dirs)
