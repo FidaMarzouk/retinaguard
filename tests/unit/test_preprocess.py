@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import pytest
-from fundus_fixtures import synthetic_fundus
+from fundus_fixtures import FUNDUS_RGB, synthetic_fundus
 
 from retinaguard.data.preprocess import (
     Circle,
@@ -15,6 +15,7 @@ from retinaguard.data.preprocess import (
     fundus_mask,
     local_mean_normalise,
     preprocess,
+    surround_colour,
 )
 
 
@@ -45,6 +46,65 @@ def test_find_fundus_dark_image() -> None:
 def test_find_fundus_rejects(img: Image) -> None:
     with pytest.raises(FundusNotFoundError):
         find_fundus(img)
+
+
+def _on_canvas(colour: tuple[int, int, int], width: int = 1200, height: int = 800) -> Image:
+    """A 250 px disc in the middle of a uniform canvas, as some cameras save it."""
+    img = np.full((height, width, 3), colour, np.uint8)
+    disc = synthetic_fundus(width=500, height=500, cx=250, cy=250, radius=250)
+    inside = circular_mask(500, 249)
+    top, left = (height - 500) // 2, (width - 500) // 2
+    img[top : top + 500, left : left + 500][inside] = disc[inside]
+    return img
+
+
+@pytest.mark.parametrize("colour", [(30, 30, 30), (255, 255, 255)], ids=["grey", "white"])
+def test_find_fundus_on_canvas(colour: tuple[int, int, int]) -> None:
+    img = _on_canvas(colour)
+    assert surround_colour(img) is not None
+    circle = find_fundus(img)
+    assert circle.cx == pytest.approx(600, abs=3)
+    assert circle.cy == pytest.approx(400, abs=3)
+    assert circle.radius == pytest.approx(250, abs=3)
+
+
+def test_find_fundus_white_canvas_with_black_ring() -> None:
+    # white page, black camera mask around the disc
+    img = np.full((800, 1200, 3), 255, np.uint8)
+    cv2.circle(img, (600, 400), 300, (0, 0, 0), thickness=-1)
+    cv2.circle(img, (600, 400), 250, FUNDUS_RGB, thickness=-1)
+    assert find_fundus(img).radius == pytest.approx(250, abs=3)
+
+
+def test_find_fundus_two_discs_keeps_larger() -> None:
+    img = np.full((600, 1400, 3), 25, np.uint8)
+    cv2.circle(img, (350, 300), 250, FUNDUS_RGB, thickness=-1)
+    cv2.circle(img, (1050, 300), 200, FUNDUS_RGB, thickness=-1)
+    circle = find_fundus(img)
+    assert circle.cx == pytest.approx(350, abs=3)
+    assert circle.radius == pytest.approx(250, abs=3)
+
+
+def test_black_surround_is_not_a_canvas() -> None:
+    assert surround_colour(synthetic_fundus()) is None
+    # clipped disc: fundus reaches the left and right edges, corners still black
+    assert surround_colour(synthetic_fundus(width=900, height=400, cx=450, cy=200)) is None
+
+
+def test_preprocess_on_canvas_fills_square() -> None:
+    out, _ = preprocess(_on_canvas((40, 40, 40)))
+    assert out[256, 300, 0] > 150  # fundus colour in the middle
+    assert out[256, 20, 0] > 150  # and reaching the side, not a small disc in a grey frame
+    assert (out[:10, :10] < 10).all()  # canvas painted black like a normal surround
+
+
+def test_preprocess_two_discs_drops_the_second() -> None:
+    img = np.full((600, 1400, 3), 25, np.uint8)
+    cv2.circle(img, (350, 300), 250, FUNDUS_RGB, thickness=-1)
+    # a smaller disc reaching into the bottom-right corner of the first disc's crop square
+    cv2.circle(img, (700, 560), 150, FUNDUS_RGB, thickness=-1)
+    out, _ = preprocess(img)
+    assert (out[-4:, -4:] < 10).all()
 
 
 def test_rejects_non_rgb() -> None:

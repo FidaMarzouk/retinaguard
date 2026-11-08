@@ -17,7 +17,7 @@ import numpy.typing as npt
 Image = npt.NDArray[np.uint8]
 
 DEFAULT_SIZE = 512
-PREPROCESS_VERSION = f"crop{DEFAULT_SIZE}_v1"
+PREPROCESS_VERSION = f"crop{DEFAULT_SIZE}_v2"
 # Stored as high-quality JPEG: ~10x smaller than PNG at 512 px, artefacts well below the
 # compression augmentation applied in training.
 JPEG_QUALITY = 95
@@ -29,6 +29,13 @@ JPEG_QUALITY = 95
 RED_THRESHOLD_FRACTION = 0.1
 RED_THRESHOLD_FLOOR = 10
 MIN_RADIUS_PX = 32
+# Some cameras save the disc on a uniform grey or white canvas (sometimes two eyes side by side)
+# instead of black. Such a surround is recognised from the image corners; fundus pixels are then
+# those that differ from it by more than SURROUND_DELTA in some channel.
+CORNER_FRACTION = 0.02
+CORNER_MAX_STD = 4.0
+CORNER_MAX_SPREAD = 8.0
+SURROUND_DELTA = 30
 NORM_BLUR_DIVISOR = 30
 NORM_MASK_FRACTION = 0.9
 GREY = 128
@@ -49,7 +56,8 @@ def find_fundus(img: Image) -> Circle:
     """Locate the fundus disc as the largest bright region of the red channel.
 
     The radius comes from the region's widest extent, so discs clipped at the top and bottom of
-    the frame (common in EyePACS) still get their true radius.
+    the frame (common in EyePACS) still get their true radius. On a grey or white canvas the
+    region is what differs from the canvas; of two discs side by side, the larger is kept.
     """
     x, y, w, h = cv2.boundingRect(_largest_bright_contour(img))
     radius = max(w, h) / 2
@@ -65,11 +73,35 @@ def fundus_mask(img: Image) -> npt.NDArray[np.bool_]:
     return mask.astype(bool)
 
 
+def surround_colour(img: Image) -> npt.NDArray[np.float32] | None:
+    """RGB colour of a uniform, non-black surround, or ``None`` for the usual black one.
+
+    At least three of the four corner patches must be flat and of the same colour, so a textured
+    fundus reaching a corner is not mistaken for a surround.
+    """
+    _check_rgb(img)
+    k = max(2, round(CORNER_FRACTION * min(img.shape[:2])))
+    corners = [img[:k, :k], img[:k, -k:], img[-k:, :k], img[-k:, -k:]]
+    pixels = [c.reshape(-1, 3).astype(np.float32) for c in corners]
+    medians = np.array([np.median(p, axis=0) for p in pixels])
+    colour = np.median(medians, axis=0)
+    flat = np.array([p.std(axis=0).max() <= CORNER_MAX_STD for p in pixels])
+    agree = np.abs(medians - colour).max(axis=1) <= CORNER_MAX_SPREAD
+    if (flat & agree).sum() < 3 or colour.max() <= RED_THRESHOLD_FLOOR:
+        return None
+    return np.asarray(colour, dtype=np.float32)
+
+
 def _largest_bright_contour(img: Image) -> npt.NDArray[np.int32]:
     _check_rgb(img)
     red = img[:, :, 0].astype(np.float32)
-    threshold = max(red.mean() * RED_THRESHOLD_FRACTION, RED_THRESHOLD_FLOOR)
-    mask = (red > threshold).astype(np.uint8)
+    surround = surround_colour(img)
+    if surround is None:
+        threshold = max(red.mean() * RED_THRESHOLD_FRACTION, RED_THRESHOLD_FLOOR)
+        mask = (red > threshold).astype(np.uint8)
+    else:
+        differs = np.abs(img.astype(np.float32) - surround).max(axis=2) > SURROUND_DELTA
+        mask = (differs & (red > RED_THRESHOLD_FLOOR)).astype(np.uint8)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         raise FundusNotFoundError("no bright region in the red channel")
@@ -96,8 +128,14 @@ def resize_square(img: Image, size: int = DEFAULT_SIZE) -> Image:
 
 
 def preprocess(img: Image, size: int = DEFAULT_SIZE) -> tuple[Image, Circle]:
-    """Crop to the fundus and resize; returns the processed image and the disc in raw pixels."""
+    """Crop to the fundus and resize; returns the processed image and the disc in raw pixels.
+
+    A grey or white canvas (and a second disc on it) is painted black first, so every output
+    has the usual black surround.
+    """
     circle = find_fundus(img)
+    if surround_colour(img) is not None:
+        img = np.where(fundus_mask(img)[..., None], img, 0).astype(np.uint8)
     return resize_square(crop_to_fundus(img, circle), size), circle
 
 
