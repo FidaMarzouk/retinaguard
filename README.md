@@ -23,7 +23,22 @@ with bootstrap 95% confidence intervals.
 
 ## Results
 
-_In progress._
+Referable diabetic retinopathy (ICDR grade ≥ 2), one image per eye, AUROC with patient-clustered
+bootstrap 95% CIs. Trained on EyePACS only; the external sites were never used for training or
+model selection.
+
+| Test set | Images (referable) | ConvNeXt-Tiny | EfficientNet-B3 |
+|---|---|---|---|
+| EyePACS internal test (US) | 3,252 (617) | **0.951** (0.939–0.961) | 0.948 (0.935–0.959) |
+| APTOS 2019 (India) | 3,517 (1,379) | **0.972** (0.967–0.977) | 0.965 (0.959–0.970) |
+| IDRiD (India) | 508 (318) | 0.982 (0.972–0.991) | **0.983** (0.973–0.991) |
+| DDR (China) | 12,354 (5,604) | **0.971** (0.969–0.974) | 0.962 (0.959–0.966) |
+
+ConvNeXt-Tiny was selected on validation AUROC and is significantly better on APTOS and DDR
+(paired bootstrap), never significantly worse. External AUROC is higher than internal mainly
+because of case mix: on the hard boundary (grade 1 vs grade 2) it is 0.82–0.94 everywhere. The
+main failure mode is end-stage disease (vitreous haemorrhage, fibrosis) predicted as no DR:
+101 of 906 DDR grade 4 images. _Calibration, deferral and further results in progress._
 
 ## Quick start
 
@@ -48,6 +63,16 @@ uv run python -m retinaguard.train.train_grader model=efficientnet_b3 "data.shar
 
 A run directory keeps `last.pt` after every epoch; rerunning the same command continues where a
 stopped run left off.
+
+Run folders downloaded from Kaggle are imported into MLflow (parameters, per-epoch metrics, test
+metrics from `evaluate`); `--register` makes that run's `best.pt` the `champion` version of the
+`dr-grader` model:
+
+```bash
+uv run python -m retinaguard.train.import_runs outputs/runs/grader-convnext_tiny \
+    --predictions-root data/interim/predictions --register grader-convnext_tiny
+uv run mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db   # or set MLFLOW_TRACKING_URI
+```
 
 ## Repository layout
 
