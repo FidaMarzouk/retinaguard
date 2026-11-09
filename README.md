@@ -27,18 +27,39 @@ Referable diabetic retinopathy (ICDR grade ≥ 2), one image per eye, AUROC with
 bootstrap 95% CIs. Trained on EyePACS only; the external sites were never used for training or
 model selection.
 
-| Test set | Images (referable) | ConvNeXt-Tiny | EfficientNet-B3 |
-|---|---|---|---|
-| EyePACS internal test (US) | 3,252 (617) | **0.951** (0.939–0.961) | 0.948 (0.935–0.959) |
-| APTOS 2019 (India) | 3,517 (1,379) | **0.972** (0.967–0.977) | 0.965 (0.959–0.970) |
-| IDRiD (India) | 508 (318) | 0.982 (0.972–0.991) | **0.983** (0.973–0.991) |
-| DDR (China) | 12,354 (5,604) | **0.971** (0.969–0.974) | 0.962 (0.959–0.966) |
+| Test set | Images (referable) | ConvNeXt-Tiny | ConvNeXt-Tiny + LMN | EfficientNet-B3 + LMN |
+|---|---|---|---|---|
+| EyePACS internal test (US) | 3,252 (617) | 0.950 (0.938–0.961) | 0.951 (0.939–0.961) | 0.948 (0.935–0.959) |
+| APTOS 2019 (India) | 3,517 (1,379) | 0.971 (0.967–0.976) | 0.972 (0.967–0.977) | 0.965 (0.959–0.970) |
+| IDRiD (India) | 508 (318) | **0.988** (0.981–0.994) | 0.982 (0.972–0.991) | 0.983 (0.973–0.991) |
+| DDR (China) | 12,354 (5,604) | 0.973 (0.970–0.975) | 0.971 (0.969–0.974) | 0.962 (0.959–0.966) |
 
-ConvNeXt-Tiny was selected on validation AUROC and is significantly better on APTOS and DDR
-(paired bootstrap), never significantly worse. External AUROC is higher than internal mainly
-because of case mix: on the hard boundary (grade 1 vs grade 2) it is 0.82–0.94 everywhere. The
-main failure mode is end-stage disease (vitreous haemorrhage, fibrosis) predicted as no DR:
-101 of 906 DDR grade 4 images. _Calibration, deferral and further results in progress._
+LMN is local mean normalisation (subtracting a blurred copy of the image to even out
+illumination). The production model is ConvNeXt-Tiny on plain images: it was chosen on
+validation AUROC (0.959 against 0.953 with LMN), and on test it is never significantly worse
+(paired bootstrap), significantly better on IDRiD, and has a higher quadratic kappa on every
+site. With LMN, ConvNeXt-Tiny is significantly better than EfficientNet-B3 on APTOS and DDR. External AUROC is
+higher than internal mainly because of case mix: on the hard boundary (grade 1 vs grade 2) it is
+0.82–0.94 everywhere. The main failure mode is end-stage disease (vitreous haemorrhage,
+fibrosis) predicted as no DR: 83 of 906 DDR grade 4 images (101 with LMN).
+
+### Triage
+
+Scores are temperature-scaled on the validation split. The clearing threshold is set on a
+separate calibration split by conformal risk control, so that on average at most 5% of
+referable eyes are cleared as NO_REFER; REFER needs a score with at least 80% precision on that
+split, and everything in between is deferred to a human.
+
+| Test set | Referable eyes cleared (FNR) | NO_REFER | REFER | Deferred |
+|---|---|---|---|---|
+| EyePACS internal test | 2.8% (1.4–4.2) | 49.3% | 19.7% | 31.0% |
+| APTOS 2019 | 0.0% | 31.0% | 49.4% | 19.6% |
+| IDRiD | 0.0% | 17.3% | 66.1% | 16.5% |
+| DDR | 1.6% (1.3–1.9) | 36.5% | 43.1% | 20.4% |
+
+The guarantee only covers images like the calibration ones; the external rates are measured, not
+guaranteed. The calibration fitted on EyePACS does not transfer to APTOS, whose grading runs a
+step higher: its referable ECE stays at 0.10 after scaling (0.02 on EyePACS).
 
 ## Quick start
 
@@ -72,6 +93,16 @@ metrics from `evaluate`); `--register` makes that run's `best.pt` the `champion`
 uv run python -m retinaguard.train.import_runs outputs/runs/grader-convnext_tiny \
     --predictions-root data/interim/predictions --register grader-convnext_tiny
 uv run mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db   # or set MLFLOW_TRACKING_URI
+```
+
+Temperature scaling and the deferral thresholds are fitted from a model's predictions; the
+targets are in `configs/policy/decision.yaml`, and the output `policy.json` feeds
+`retinaguard.serving.policy`:
+
+```bash
+uv run python -m retinaguard.train.calibrate --manifest data/manifests/manifest.parquet \
+    --predictions data/interim/predictions/grader-convnext_tiny-no_lmn/predictions.parquet \
+    --out-dir data/interim/predictions/grader-convnext_tiny-no_lmn/policy
 ```
 
 ## Repository layout
