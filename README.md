@@ -129,6 +129,29 @@ uv run python -m retinaguard.train.fit_ood --manifest data/manifests/manifest.pa
     --policy-dir data/interim/predictions/grader-convnext_tiny-no_lmn/policy
 ```
 
+### Serving
+
+The service runs ONNX models on CPU, without PyTorch. Export the trained models and the fitted
+policy into one folder (each export is checked against PyTorch to within 1e-3), then serve it:
+
+```bash
+uv run python -m retinaguard.export.onnx_export --out-dir outputs/models \
+    --quality outputs/runs/quality-efficientnet_b0/best.pt \
+    --grader outputs/runs/grader-convnext_tiny-no_lmn/best.pt \
+    --policy-dir data/interim/predictions/grader-convnext_tiny-no_lmn/policy
+make serve   # http://localhost:8000/docs
+curl -F image=@photo.jpg -F site=clinic-a http://localhost:8000/predict
+```
+
+`POST /predict` (optionally `lesions=true` for an overlay) and `POST /predict/batch` return the
+decision, its reason, the calibrated referable probability, the grade, the quality verdict and
+the out-of-distribution score. `GET /predictions?decision=DEFER_TO_HUMAN` lists the review queue
+and `GET /predictions/{id}` one record. Every prediction is stored with its model versions,
+config hash and latency (SQLite locally; Postgres with Alembic migrations under `make up`);
+uploaded images are not stored, only their SHA-256. On a laptop CPU a full-size photo takes
+about 0.26 s (p95 0.27 s) through the whole chain. Any failure returns `DEFER_TO_HUMAN`, and
+without models the service refuses to predict.
+
 ## Repository layout
 
 ```

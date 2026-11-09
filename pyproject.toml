@@ -17,6 +17,10 @@ api = [
     "fastapi>=0.115",
     "onnxruntime>=1.18",
     "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0,<2.1",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.2",
+    "python-multipart>=0.0.9",
 ]
 app = [
     "streamlit>=1.38",

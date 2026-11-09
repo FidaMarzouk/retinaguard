@@ -25,10 +25,15 @@ services:
 
   api:
     build: { context: ., dockerfile: docker/python.Dockerfile, args: { EXTRA: api } }
-    command: uvicorn retinaguard.serving.api:app --host 0.0.0.0 --port 8000
+    # migrate the prediction store, then serve
+    command: sh -c "alembic upgrade head && uvicorn retinaguard.serving.api:app --host 0.0.0.0 --port 8000"
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-retinaguard}:${POSTGRES_PASSWORD:-retinaguard-dev}@postgres:5432/${POSTGRES_DB:-retinaguard}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-retinaguard}:${POSTGRES_PASSWORD:-retinaguard-dev}@postgres:5432/${POSTGRES_DB:-retinaguard}
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODELS_DIR: /srv/models
+      GIT_SHA: ${GIT_SHA:-unknown}
+    # exported models (onnx_export output); never baked into the image
+    volumes: ["${MODELS_DIR:-./outputs/models}:/srv/models:ro"]
     ports: ["${API_PORT:-8000}:8000"]
     depends_on:
       postgres: { condition: service_healthy }
