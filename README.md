@@ -58,7 +58,15 @@ split, and everything in between is deferred to a human.
 | DDR | 1.6% (1.3–1.9) | 36.5% | 43.1% | 20.4% |
 
 The guarantee only covers images like the calibration ones; the external rates are measured, not
-guaranteed. The calibration fitted on EyePACS does not transfer to APTOS, whose grading runs a
+guaranteed.
+
+Before grading, a quality gate (EfficientNet-B0 trained on the EyeQ labels of the EyePACS
+training split) sends unusable photos back as RETAKE. On the EyePACS test split it reaches a
+macro-F1 of 0.854 (0.828–0.879) over good / usable / reject, with 85% of rejects caught; on DDR
+it flags 99% of the 1,150 photos DDR's graders marked ungradable. Its cost is false retakes on
+gradable photos from other sites: 8% on IDRiD, 12% on APTOS and 20% on DDR. On EyePACS and DDR
+the flagged photos are genuinely harder for the grader (AUROC 0.93 against 0.95–0.97 on the rest);
+on APTOS and IDRiD they are not, so there the gate is over-cautious with unfamiliar cameras. The calibration fitted on EyePACS does not transfer to APTOS, whose grading runs a
 step higher: its referable ECE stays at 0.10 after scaling (0.02 on EyePACS).
 
 ## Quick start
