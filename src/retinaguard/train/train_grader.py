@@ -26,7 +26,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader, Sampler
 
 from retinaguard import __version__
-from retinaguard.config import load_config
+from retinaguard.config import load_config, timm_kwargs
 from retinaguard.data.datasets import (
     FundusDataset,
     grade_balancing_sampler,
@@ -188,6 +188,7 @@ def train(cfg: DictConfig) -> Path:
         cfg.model.timm_name,
         pretrained=cfg.model.pretrained,
         drop_path_rate=cfg.model.drop_path_rate,
+        timm_kwargs=timm_kwargs(cfg.model),
     ).to(device)
     model = model.to(memory_format=torch.channels_last)
     optimizer = torch.optim.AdamW(

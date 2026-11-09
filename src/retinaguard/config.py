@@ -2,9 +2,10 @@
 
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any, cast
 
 from hydra import compose, initialize_config_dir
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 
 def config_dir() -> Path:
@@ -17,3 +18,9 @@ def load_config(name: str, overrides: Sequence[str] = ()) -> DictConfig:
     """Compose ``configs/{name}.yaml`` with Hydra overrides such as ``model=efficientnet_b3``."""
     with initialize_config_dir(config_dir=str(config_dir().resolve()), version_base="1.3"):
         return compose(config_name=name, overrides=list(overrides))
+
+
+def timm_kwargs(model_cfg: DictConfig) -> dict[str, Any]:
+    """Extra ``timm.create_model`` arguments of a model config (empty when it has none)."""
+    extra = model_cfg.get("timm_kwargs")
+    return {} if extra is None else cast(dict[str, Any], OmegaConf.to_container(extra))

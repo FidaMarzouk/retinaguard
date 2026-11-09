@@ -32,7 +32,11 @@ def load_grader(checkpoint: Path, device: torch.device) -> tuple[Grader, dict[st
     """Model and training config from a ``best.pt`` written by ``train_grader``."""
     state = torch.load(checkpoint, map_location=device, weights_only=False)
     config: dict[str, Any] = state["config"]
-    model = Grader(config["model"]["timm_name"], pretrained=False)
+    model = Grader(
+        config["model"]["timm_name"],
+        pretrained=False,
+        timm_kwargs=config["model"].get("timm_kwargs"),
+    )
     model.load_state_dict(state["model"])
     return model.to(device).eval(), config
 

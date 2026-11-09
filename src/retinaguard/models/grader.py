@@ -1,6 +1,7 @@
 """DR grader: a timm backbone with two heads, the 5-class ICDR grade and binary referable DR."""
 
-from typing import NamedTuple, cast
+from collections.abc import Mapping
+from typing import Any, NamedTuple, cast
 
 import timm
 import torch
@@ -17,10 +18,23 @@ class GraderOutput(NamedTuple):
 
 
 class Grader(nn.Module):
-    def __init__(self, timm_name: str, *, pretrained: bool, drop_path_rate: float = 0.0) -> None:
+    def __init__(
+        self,
+        timm_name: str,
+        *,
+        pretrained: bool,
+        drop_path_rate: float = 0.0,
+        timm_kwargs: Mapping[str, Any] | None = None,
+    ) -> None:
+        """``timm_kwargs`` go to ``timm.create_model``, e.g. ``dynamic_img_size`` so a ViT
+        pretrained at another resolution accepts the 512 px inputs."""
         super().__init__()
         self.backbone = timm.create_model(
-            timm_name, pretrained=pretrained, num_classes=0, drop_path_rate=drop_path_rate
+            timm_name,
+            pretrained=pretrained,
+            num_classes=0,
+            drop_path_rate=drop_path_rate,
+            **dict(timm_kwargs or {}),
         )
         features = cast(int, self.backbone.num_features)
         self.grade_head = nn.Linear(features, N_GRADES)

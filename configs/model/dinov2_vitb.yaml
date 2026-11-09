@@ -1,0 +1,9 @@
+name: dinov2_vitb
+# Self-supervised ViT-B/14 (Apache 2.0), pretrained on 142M natural images at 518 px.
+timm_name: vit_base_patch14_dinov2.lvd142m
+pretrained: true
+drop_path_rate: 0.1
+timm_kwargs:
+  # 512 px inputs: pad to a multiple of the 14 px patch and interpolate position embeddings
+  dynamic_img_size: true
+  dynamic_img_pad: true
