@@ -58,7 +58,9 @@ split, and everything in between is deferred to a human.
 | DDR | 1.6% (1.3–1.9) | 36.5% | 43.1% | 20.4% |
 
 The guarantee only covers images like the calibration ones; the external rates are measured, not
-guaranteed.
+guaranteed. The calibration fitted on EyePACS does not transfer to the external sites, which
+are off in opposite directions: the model scores APTOS eyes as more severe than their labels
+(referable ECE stays at 0.10 after scaling, against 0.02 on EyePACS) and under-calls DDR eyes.
 
 Before grading, a quality gate (EfficientNet-B0 trained on the EyeQ labels of the EyePACS
 training split) sends unusable photos back as RETAKE. On the EyePACS test split it reaches a
@@ -73,8 +75,12 @@ to the nearest grade's mean) from the EyePACS validation images; the threshold f
 calibration split. It flags 1.0% of the EyePACS test, 0.5% of APTOS, 1.8% of IDRiD and 4.1% of
 DDR. The embedding hardly tells the sites apart (site-vs-EyePACS AUROC 0.52–0.62), but the DDR
 images it does flag are genuinely hard: the grader's AUROC on them is 0.81, against 0.97 on the
-rest. The calibration fitted on EyePACS does not transfer to APTOS, whose grading runs a
-step higher: its referable ECE stays at 0.10 after scaling (0.02 on EyePACS).
+rest. Most images it flags are already sent back by the quality gate, so it adds only 0.1–0.4%
+of deferrals.
+
+With all three steps, a human handles 25–38% of photos (retakes plus deferrals) and at most 2.7%
+of the referable eyes that are graded get cleared. Calibration curves, accuracy against coverage
+and the decision mix per site are in `notebooks/triage_report.ipynb`.
 
 ## Quick start
 
