@@ -1,0 +1,3 @@
+# Deferral policy targets; `python -m retinaguard.train.calibrate` fits the thresholds from them.
+alpha: 0.05          # bound on the expected share of referable eyes cleared as NO_REFER
+min_precision: 0.80  # REFER above the smallest threshold reaching this precision on calib
