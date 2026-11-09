@@ -8,6 +8,7 @@ import pytest
 from retinaguard.models.calibration import sigmoid
 from retinaguard.serving.policy import Thresholds
 from retinaguard.train.calibrate import accuracy_coverage, deferral_metrics, main
+from retinaguard.train.fit_ood import main as fit_ood_main
 from retinaguard.train.predict import PROBABILITY_COLUMNS
 
 
@@ -105,3 +106,39 @@ def test_accuracy_coverage_drops_least_confident_first() -> None:
     p = np.array([0.99, 0.01, 0.45, 0.55])  # the two least confident are wrong
     curve = accuracy_coverage(labels, p, [0.5, 1.0])
     assert curve["accuracy"].tolist() == [1.0, 0.5]
+
+
+def test_fit_ood_main(tmp_path: Path) -> None:
+    manifest, predictions = _synthetic(400)
+    manifest.to_parquet(tmp_path / "manifest.parquet")
+    run = tmp_path / "run"
+    run.mkdir()
+    predictions.to_parquet(run / "predictions.parquet")
+    rng = np.random.default_rng(1)
+    embeddings = rng.normal(size=(len(predictions), 6))
+    embeddings[manifest["source"].to_numpy() == "idrid"] += 3  # the external site looks different
+    np.save(run / "embeddings.npy", embeddings.astype(np.float16))
+    policy_dir = run / "policy"
+    main(
+        [
+            f"--manifest={tmp_path / 'manifest.parquet'}",
+            f"--predictions={run / 'predictions.parquet'}",
+            f"--out-dir={policy_dir}",
+            "--resamples=20",
+        ]
+    )
+    fit_ood_main(
+        [
+            f"--manifest={tmp_path / 'manifest.parquet'}",
+            f"--predictions-dir={run}",
+            f"--policy-dir={policy_dir}",
+            "--resamples=20",
+        ]
+    )
+    thresholds = Thresholds.load(policy_dir / "policy.json")
+    assert thresholds.ood_threshold is not None
+    assert json.loads((policy_dir / "policy.json").read_text())["ood_percentile"] == 99
+    table = pd.read_csv(policy_dir / "ood.csv", index_col=0)
+    assert table.loc["eyepacs_calib", "flagged"] == pytest.approx(0.01, abs=0.01)
+    assert table.loc["idrid", "flagged"] > 0.5
+    assert table.loc["idrid", "site_auroc"] > 0.9

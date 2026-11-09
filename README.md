@@ -66,7 +66,14 @@ macro-F1 of 0.854 (0.828–0.879) over good / usable / reject, with 85% of rejec
 it flags 99% of the 1,150 photos DDR's graders marked ungradable. Its cost is false retakes on
 gradable photos from other sites: 8% on IDRiD, 12% on APTOS and 20% on DDR. On EyePACS and DDR
 the flagged photos are genuinely harder for the grader (AUROC 0.93 against 0.95–0.97 on the rest);
-on APTOS and IDRiD they are not, so there the gate is over-cautious with unfamiliar cameras. The calibration fitted on EyePACS does not transfer to APTOS, whose grading runs a
+on APTOS and IDRiD they are not, so there the gate is over-cautious with unfamiliar cameras.
+
+An out-of-distribution check defers images whose grader embedding is far (Mahalanobis distance
+to the nearest grade's mean) from the EyePACS validation images; the threshold flags 1% of the
+calibration split. It flags 1.0% of the EyePACS test, 0.5% of APTOS, 1.8% of IDRiD and 4.1% of
+DDR. The embedding hardly tells the sites apart (site-vs-EyePACS AUROC 0.52–0.62), but the DDR
+images it does flag are genuinely hard: the grader's AUROC on them is 0.81, against 0.97 on the
+rest. The calibration fitted on EyePACS does not transfer to APTOS, whose grading runs a
 step higher: its referable ECE stays at 0.10 after scaling (0.02 on EyePACS).
 
 ## Quick start
@@ -111,6 +118,9 @@ targets are in `configs/policy/decision.yaml`, and the output `policy.json` feed
 uv run python -m retinaguard.train.calibrate --manifest data/manifests/manifest.parquet \
     --predictions data/interim/predictions/grader-convnext_tiny-no_lmn/predictions.parquet \
     --out-dir data/interim/predictions/grader-convnext_tiny-no_lmn/policy
+uv run python -m retinaguard.train.fit_ood --manifest data/manifests/manifest.parquet \
+    --predictions-dir data/interim/predictions/grader-convnext_tiny-no_lmn \
+    --policy-dir data/interim/predictions/grader-convnext_tiny-no_lmn/policy
 ```
 
 ## Repository layout
