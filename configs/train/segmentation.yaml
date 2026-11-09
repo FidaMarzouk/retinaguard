@@ -1,0 +1,29 @@
+# @package _global_
+# Lesion segmentation: U-Net, 4 sigmoid channels (MA, HE, EX, SE), on IDRiD and DDR.
+run_name: seg-pooled
+output_dir: null  # null: /kaggle/working/runs on Kaggle, ./outputs/runs elsewhere
+seed: 0
+
+model:
+  encoder: resnet34
+  pretrained: true
+
+data:
+  shard_dirs: []  # folders holding seg_index.parquet and its shards
+  train_sites: [idrid, ddr]  # leave one site out by listing only the other
+  crop_size: 512  # random training crops from the 1024 px prepared images
+  lesion_crop_fraction: 0.5  # share of crops centred on a lesion pixel
+  limit_per_split: null  # cap on images per site and split, for smoke tests
+
+train:
+  epochs: 40
+  samples_per_epoch: 1000  # random crops per epoch
+  batch_size: 8
+  lr: 3.0e-4
+  weight_decay: 1.0e-4
+  warmup_epochs: 1
+  amp: true  # mixed precision, GPU only
+  num_workers: 4
+  val_every: 2  # epochs between validations on full images
+  patience: 5  # validations without a better score before stopping
+  device: auto

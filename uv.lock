@@ -5150,6 +5150,7 @@ train = [
     { name = "pandera" },
     { name = "pyarrow" },
     { name = "scikit-learn" },
+    { name = "segmentation-models-pytorch" },
     { name = "timm" },
     { name = "torch", version = "2.15.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.15.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
@@ -5189,6 +5190,7 @@ requires-dist = [
     { name = "retinaguard", extras = ["data"], marker = "extra == 'pipeline'" },
     { name = "retinaguard", extras = ["data"], marker = "extra == 'train'" },
     { name = "scikit-learn", marker = "extra == 'train'", specifier = ">=1.5" },
+    { name = "segmentation-models-pytorch", marker = "extra == 'train'", specifier = ">=0.4" },
     { name = "sqlalchemy", marker = "extra == 'tracking'", specifier = ">=2.0,<2.1" },
     { name = "streamlit", marker = "extra == 'app'", specifier = ">=1.38" },
     { name = "timm", marker = "extra == 'train'", specifier = ">=1.0" },
@@ -5667,6 +5669,28 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/90/d5/62ab01546616c42d05e11fe133ce80e1d5c5c601bfc391de41f52e32ce66/scmrepo-3.6.2.tar.gz", hash = "sha256:750741af151e4c602dbf1456b49c7a1d27844527ba94db1e0c580b167cbd9316", size = 97614, upload-time = "2026-03-31T05:05:12.452Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/16/42/f4bb5e4612681d28fb01335d5faa67e1478adc63077c86555776fe89e584/scmrepo-3.6.2-py3-none-any.whl", hash = "sha256:b6d2a904562d3fc8a1a375234ce6f9a3e47ce83cb67257381fa5dc43c6006d4a", size = 74242, upload-time = "2026-03-31T05:05:10.986Z" },
+]
+
+[[package]]
+name = "segmentation-models-pytorch"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pillow" },
+    { name = "safetensors" },
+    { name = "timm" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.15.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "torchvision", version = "0.29.2", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torchvision", version = "0.29.2+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/40/b5/dfeb5742787921c61b61490dcf1b599247547e9468bbf01b303eed3e7ee4/segmentation_models_pytorch-0.6.0.tar.gz", hash = "sha256:5f90a7a43fac608f85a9dce66f65297d887605da9c2caafb44aa875c30180424", size = 104077, upload-time = "2026-10-26T16:44:36.527Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/53/90/1af6ca7308f616210d30e81270712e6a460971b5233f5b6d7b36ecfd739b/segmentation_models_pytorch-0.6.0-py3-none-any.whl", hash = "sha256:c46162221b5abe3bc296b222fbea8aa80d0b56e7130f7ddef654f707804534e2", size = 154621, upload-time = "2026-10-26T16:44:35.106Z" },
 ]
 
 [[package]]
