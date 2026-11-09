@@ -9,6 +9,7 @@ WORKDIR /srv
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project --extra ${EXTRA}
 COPY src ./src
+COPY configs ./configs
 COPY alembic.ini ./
 COPY migrations ./migrations
 RUN uv sync --frozen --no-dev --extra ${EXTRA}
