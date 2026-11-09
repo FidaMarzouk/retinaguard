@@ -152,6 +152,12 @@ uploaded images are not stored, only their SHA-256. On a laptop CPU a full-size 
 about 0.26 s (p95 0.27 s) through the whole chain. Any failure returns `DEFER_TO_HUMAN`, and
 without models the service refuses to predict.
 
+`make app` starts the Streamlit app (API at `API_URL`, default `http://localhost:8000`): upload
+a photo and see the decision, its reason, the grade probabilities and the lesion overlay; work
+through the review queue of deferred photos; compare sites; follow retake, deferral and error
+rates and latency; read the model card. Its per-site figures come from
+`src/retinaguard/app/site_summary.json`, rebuilt with `python -m retinaguard.app.summary`.
+
 ## Repository layout
 
 ```
