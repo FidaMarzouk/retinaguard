@@ -1,0 +1,28 @@
+# @package _global_
+# Image quality model: EyeQ classes good / usable / reject, on EyePACS processed crops.
+run_name: quality-${model.name}
+output_dir: null  # null: /kaggle/working/runs on Kaggle, ./outputs/runs elsewhere
+seed: 0
+
+model:
+  name: efficientnet_b0
+  timm_name: efficientnet_b0.ra_in1k
+  pretrained: true
+  drop_path_rate: 0.2
+
+data:
+  manifest: data/manifests/manifest.parquet
+  shard_dirs: []  # folders holding the processed image shards (*.zip)
+  image_size: 512
+  limit_per_split: null  # cap on images per split, for smoke tests
+
+train:
+  epochs: 15
+  batch_size: 32
+  lr: 3.0e-4
+  weight_decay: 0.01
+  warmup_epochs: 1
+  amp: true  # mixed precision, GPU only
+  num_workers: 4
+  patience: 4  # epochs without a better validation macro-F1 before stopping
+  device: auto

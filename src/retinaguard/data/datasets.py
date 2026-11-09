@@ -1,7 +1,9 @@
-"""Training and evaluation data for the DR grader, read from the manifest and processed shards.
+"""Training and evaluation data for the DR grader and the quality model, read from the manifest
+and processed shards.
 
-Each item is the stored fundus crop, optionally augmented, optionally local-mean normalised,
-then scaled with ImageNet statistics: ``(image CHW float32, ICDR grade, referable 0/1)``.
+Each grader item is the stored fundus crop, optionally augmented, optionally local-mean
+normalised, then scaled with ImageNet statistics: ``(image CHW float32, ICDR grade, referable
+0/1)``. A quality item is ``(image, quality class)`` with the classes of ``QUALITY_CLASSES``.
 """
 
 import os
@@ -17,6 +19,7 @@ from torch.utils.data import Dataset, WeightedRandomSampler
 
 from retinaguard.data.preprocess import Image, local_mean_normalise
 from retinaguard.data.processing import ProcessedImages, shard_roots
+from retinaguard.models.quality import QUALITY_CLASSES
 
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -41,6 +44,21 @@ def select_rows(
     if exclude_quality_reject:
         rows = rows[rows["quality_label"].ne("reject").fillna(True)]
     rows = rows.sort_values("image_id")
+    if limit_per_split is not None:
+        rows = rows.groupby("split", sort=False).head(limit_per_split)
+    return rows.reset_index(drop=True)
+
+
+def select_quality_rows(
+    manifest: pd.DataFrame, splits: Iterable[str], *, limit_per_split: int | None = None
+) -> pd.DataFrame:
+    """Processed EyePACS images of ``splits`` with an EyeQ quality label."""
+    rows = manifest[
+        manifest["split"].isin(list(splits))
+        & (manifest["source"] == "eyepacs")
+        & manifest["processed_path"].notna()
+        & manifest["quality_label"].notna()
+    ].sort_values("image_id")
     if limit_per_split is not None:
         rows = rows.groupby("split", sort=False).head(limit_per_split)
     return rows.reset_index(drop=True)
@@ -121,6 +139,52 @@ class FundusDataset(Dataset[tuple[torch.Tensor, int, float]]):
             self._reader = ProcessedImages(self._paths, self._roots)
             self._reader_pid = os.getpid()
         return self._reader.read(image_id)
+
+
+class QualityDataset(FundusDataset):
+    """Rows of ``select_quality_rows`` as ``(image, quality class)``; rows without a quality
+    label (images only predicted) get class -1."""
+
+    def __init__(
+        self,
+        rows: pd.DataFrame,
+        shard_dirs: Sequence[Path],
+        *,
+        size: int,
+        augment: A.Compose | None = None,
+    ) -> None:
+        super().__init__(
+            rows.assign(dr_grade=None),
+            shard_dirs,
+            size=size,
+            local_mean_norm=False,
+            augment=augment,
+        )
+        codes = {name: code for code, name in enumerate(QUALITY_CLASSES)}
+        self.labels = rows["quality_label"].map(codes).fillna(-1).astype(int).to_numpy()
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, int, float]:
+        image, _, _ = super().__getitem__(index)
+        return image, int(self.labels[index]), 0.0
+
+
+def quality_augment() -> A.Compose:
+    """Geometry only: blur, exposure and compression changes are what the quality labels
+    describe, so photometric augmentation would corrupt them."""
+    return A.Compose(
+        [
+            A.HorizontalFlip(),
+            A.VerticalFlip(),
+            A.Affine(
+                rotate=(-180, 180),
+                scale=(0.95, 1.05),
+                translate_percent=(-0.03, 0.03),
+                border_mode=cv2.BORDER_CONSTANT,
+                fill=0,
+                p=1.0,
+            ),
+        ]
+    )
 
 
 def grade_balancing_sampler(grades: np.ndarray, seed: int) -> WeightedRandomSampler:
