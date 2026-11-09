@@ -86,3 +86,66 @@ def seg_shard(tmp_path_factory: pytest.TempPathFactory) -> Path:
     out = tmp_path_factory.mktemp("seg_shard")
     write_index(build_shard(idrid_pairs(root), out / "idrid_seg.zip", size=128), out)
     return out
+
+
+@pytest.fixture(scope="session")
+def models_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Tiny exported models (random weights) with a fitted-looking policy, as serving loads."""
+    import json
+
+    import torch
+
+    from retinaguard.export.onnx_export import main as export_main
+    from retinaguard.models.grader import Grader
+    from retinaguard.models.ood import Mahalanobis
+    from retinaguard.models.quality import quality_model
+    from retinaguard.models.segmentation import seg_model
+
+    root = tmp_path_factory.mktemp("models")
+    grader = Grader("test_convnext", pretrained=False)
+    checkpoints = {
+        "quality": (
+            quality_model("test_efficientnet", pretrained=False),
+            {"model": {"timm_name": "test_efficientnet"}, "data": {"image_size": 64}},
+        ),
+        "grader": (
+            grader,
+            {
+                "model": {"timm_name": "test_convnext"},
+                "data": {"image_size": 64, "local_mean_norm": False},
+            },
+        ),
+        "segmentation": (
+            seg_model("resnet18", pretrained=False),
+            {"model": {"encoder": "resnet18"}},
+        ),
+    }
+    for name, (model, config) in checkpoints.items():
+        torch.save({"model": model.state_dict(), "config": config}, root / f"{name}.pt")
+    policy_dir = root / "policy"
+    policy_dir.mkdir()
+    dim = int(grader.backbone.num_features)
+    rng = np.random.default_rng(0)
+    Mahalanobis.fit(rng.normal(size=(200, dim)), rng.integers(0, 5, 200)).save(
+        policy_dir / "ood.npz"
+    )
+    policy = {
+        "lambda_low": 0.05,
+        "lambda_high": 0.6,
+        "temperature_referable": 1.3,
+        "temperature_grade": 1.2,
+        "ood_threshold": 1e6,  # nothing is out of distribution for random weights
+    }
+    (policy_dir / "policy.json").write_text(json.dumps(policy))
+    out = root / "exported"
+    export_main(
+        [
+            f"--out-dir={out}",
+            f"--quality={root / 'quality.pt'}",
+            f"--grader={root / 'grader.pt'}",
+            f"--segmentation={root / 'segmentation.pt'}",
+            "--segmentation-size=128",
+            f"--policy-dir={policy_dir}",
+        ]
+    )
+    return out

@@ -13,7 +13,9 @@ dependencies = [
 # Runtime extras per component, so the API image does not pull in Streamlit or Dagster.
 [project.optional-dependencies]
 api = [
+    "retinaguard[data]",  # preprocessing (OpenCV) and lesion constants
     "fastapi>=0.115",
+    "onnxruntime>=1.18",
     "uvicorn[standard]>=0.30",
 ]
 app = [
@@ -40,6 +42,8 @@ train = [
     "hydra-core>=1.3",
     "scikit-learn>=1.5",
     "segmentation-models-pytorch>=0.4",
+    "onnx>=1.16",
+    "onnxscript>=0.1",
 ]
 
 # Local experiment tracking: imports Kaggle run folders into MLflow (same 2.x line as the server
@@ -105,7 +109,7 @@ strict = true
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["streamlit.*", "dagster.*", "sklearn.*", "albumentations.*", "segmentation_models_pytorch.*"]
+module = ["streamlit.*", "dagster.*", "sklearn.*", "albumentations.*", "segmentation_models_pytorch.*", "onnxruntime.*"]
 ignore_missing_imports = true
 
 # MLflow's entity constructors (Metric, Param) are not annotated.

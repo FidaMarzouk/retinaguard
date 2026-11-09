@@ -15,6 +15,7 @@ import math
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 
 class Decision(StrEnum):
@@ -50,7 +51,11 @@ class Thresholds:
 
     @classmethod
     def load(cls, path: Path) -> "Thresholds":
-        fields = json.loads(path.read_text(encoding="utf-8"))
+        return cls.load_dict(json.loads(path.read_text(encoding="utf-8")))
+
+    @classmethod
+    def load_dict(cls, fields: dict[str, Any]) -> "Thresholds":
+        """From a ``policy.json`` mapping; keys other than the fields are ignored."""
         return cls(**{name: fields[name] for name in cls.__dataclass_fields__ if name in fields})
 
     def to_dict(self) -> dict[str, float | None]:
