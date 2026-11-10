@@ -85,6 +85,20 @@ higher than internal mainly because of case mix: on the hard boundary (grade 1 v
 0.82–0.94 everywhere. The main failure mode is end-stage disease (vitreous haemorrhage,
 fibrosis) predicted as no DR: 83 of 906 DDR grade 4 images (101 with LMN).
 
+**Foundation model.** A frozen DINOv2 ViT-B/14 (self-supervised on 142M natural images) with a
+logistic-regression probe on its embedding is significantly worse on every site:
+
+| Backbone | EyePACS | APTOS | IDRiD | DDR | Training (T4 GPU-h) | CPU latency |
+|---|---|---|---|---|---|---|
+| ConvNeXt-Tiny, fine-tuned | **0.950** | **0.971** | **0.988** | **0.973** | 3.4 | 117 ms (ONNX) |
+| EfficientNet-B3 + LMN, fine-tuned | 0.948 | 0.965 | 0.983 | 0.962 | 2.5 | 130 ms |
+| DINOv2 ViT-B/14, frozen + linear probe | 0.881 | 0.965 | 0.949 | 0.909 | 0.4 | 927 ms |
+
+The paired differences favour ConvNeXt by 0.007 (APTOS) to 0.069 (EyePACS), all with 95% CIs
+excluding zero. General natural-image features do not carry DR grading without fine-tuning,
+and DINOv2 at 512 px is eight times slower on CPU, beyond the 500 ms serving budget; fine-tuning
+it was not run for that reason and for compute.
+
 ### Triage
 
 Scores are temperature-scaled on the validation split. The clearing threshold is set on a
