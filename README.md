@@ -163,7 +163,9 @@ an explanation for the reader of a referral, not an input to the decision; `lesi
 
 Each site's test set was replayed as daily batches of 250 photos and compared with the EyePACS
 calibration split. Drift in the grader's embeddings (MMD) flags every batch from APTOS, IDRiD
-and DDR and none of the 13 EyePACS batches, yet the external sites keep their AUROC: the drift
+and DDR and none of the 13 EyePACS batches, and Evidently's data-drift report (over the
+prediction, the OOD score, image statistics and ten principal components of the embedding)
+agrees batch for batch. Yet the external sites keep their AUROC: the drift
 is mostly a different population and case mix, and what degrades is calibration (ECE 0.04 on
 EyePACS, 0.11 on APTOS). In a gradual mix of DDR into EyePACS batches, MMD detects the change
 from 30% DDR.
@@ -177,8 +179,9 @@ deferral or out-of-distribution rate exceeds twice the reference; it flags those
 batches and no real site batch. Figures are in `notebooks/monitoring_report.ipynb`.
 
 Reports are written per site and day to the `drift_reports` table by a daily Dagster schedule
-(or `python -m retinaguard.monitoring.batches report`), served at `GET /drift` and shown in the
-app. A random reviewed sample of each batch remains the only way to measure performance live.
+(or the `monitor` service under `make up`, or `python -m retinaguard.monitoring.batches report`):
+rates, alert, PSI and Evidently's drift share, plus Evidently's HTML report of each batch, served
+at `GET /drift` and linked from the app. Evidently's telemetry is switched off. A random reviewed sample of each batch remains the only way to measure performance live.
 
 ## Intended use and limitations
 

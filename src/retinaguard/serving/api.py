@@ -4,7 +4,9 @@
 
 Configuration (environment): ``MODELS_DIR`` (``onnx_export`` output, default
 ``outputs/models``), ``DATABASE_URL`` (default a SQLite file ``outputs/retinaguard.db``; a
-Postgres database must be migrated first with ``alembic upgrade head``) and ``GIT_SHA``. Without
+Postgres database must be migrated first with ``alembic upgrade head``), ``DRIFT_HTML_DIR``
+(Evidently reports written by ``retinaguard.monitoring.batches``, default
+``outputs/drift_reports``) and ``GIT_SHA``. Without
 models the service still answers ``/health`` and record queries, and refuses predictions (503)
 rather than guess. Uploaded images are never stored, only their SHA-256.
 """
@@ -19,9 +21,11 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from retinaguard import DISCLAIMER, __version__
+from retinaguard.monitoring.drift import report_filename
 from retinaguard.serving.inference import Pipeline, Prediction
 from retinaguard.serving.policy import Decision
 from retinaguard.serving.store import PredictionStore, create_schema
@@ -30,6 +34,7 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 MAX_BATCH = 32
 DEFAULT_MODELS_DIR = Path("outputs/models")
 DEFAULT_DATABASE_URL = "sqlite:///outputs/retinaguard.db"
+DEFAULT_DRIFT_HTML_DIR = Path("outputs/drift_reports")
 
 
 class Health(BaseModel):
@@ -93,6 +98,8 @@ class DriftReport(BaseModel):
     error_rate: float | None
     psi_p_referable: float | None
     psi_ood_score: float | None
+    evidently_drift_share: float | None = None
+    report_url: str | None = None
     alert: str | None
     created_at: datetime
 
@@ -107,7 +114,12 @@ def _config_hash(models_dir: Path) -> str:
     return digest.hexdigest()
 
 
-def create_app(models_dir: Path, database_url: str, git_sha: str = "unknown") -> FastAPI:
+def create_app(
+    models_dir: Path,
+    database_url: str,
+    git_sha: str = "unknown",
+    drift_html_dir: Path = DEFAULT_DRIFT_HTML_DIR,
+) -> FastAPI:
     state: dict[str, Any] = {}
 
     @asynccontextmanager
@@ -232,8 +244,22 @@ def create_app(models_dir: Path, database_url: str, git_sha: str = "unknown") ->
 
     @app.get("/drift")
     def drift(limit: Annotated[int, Query(ge=1, le=1000)] = 100) -> list[DriftReport]:
-        """Drift reports per site and day (written by ``retinaguard.monitoring.batches``)."""
-        return [DriftReport(**row) for row in store().drift(limit)]
+        """Drift reports per site and day (written by ``retinaguard.monitoring.batches``), with
+        the address of the batch's Evidently report when one was written."""
+        reports = []
+        for row in store().drift(limit):
+            name = report_filename(row["site"], row["day"])
+            url = f"/drift/reports/{name}" if (drift_html_dir / name).is_file() else None
+            reports.append(DriftReport(**row, report_url=url))
+        return reports
+
+    @app.get("/drift/reports/{name}")
+    def drift_report(name: str) -> FileResponse:
+        """One Evidently HTML report."""
+        path = drift_html_dir / name
+        if Path(name).name != name or not name.endswith(".html") or not path.is_file():
+            raise HTTPException(404, "no such report")
+        return FileResponse(path, media_type="text/html")
 
     @app.get("/predictions/{prediction_id}")
     def get_prediction(prediction_id: str) -> PredictionRecord:
@@ -249,4 +275,5 @@ app = create_app(
     Path(os.environ.get("MODELS_DIR", DEFAULT_MODELS_DIR)),
     os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL),
     os.environ.get("GIT_SHA", "unknown"),
+    Path(os.environ.get("DRIFT_HTML_DIR", DEFAULT_DRIFT_HTML_DIR)),
 )

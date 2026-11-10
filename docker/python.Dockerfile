@@ -14,5 +14,5 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 RUN uv sync --frozen --no-dev --extra ${EXTRA}
 
-RUN useradd --create-home appuser
+RUN useradd --create-home appuser && mkdir -p /srv/drift_reports && chown appuser /srv/drift_reports
 USER appuser

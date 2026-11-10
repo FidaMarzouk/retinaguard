@@ -6,7 +6,15 @@ import pandas as pd
 import pytest
 
 from retinaguard.data.preprocess import encode_jpeg
-from retinaguard.monitoring.drift import alerts, decision_rates, mean_shift, mmd, psi
+from retinaguard.monitoring.drift import (
+    alerts,
+    decision_rates,
+    mean_shift,
+    mmd,
+    psi,
+    report_filename,
+)
+from retinaguard.monitoring.evidently_reports import embedding_components, evidently_drift
 from retinaguard.monitoring.replay import degrade, replay, replay_summary
 from retinaguard.monitoring.simulate import batch_metrics, batches
 
@@ -66,8 +74,10 @@ def _scored(n: int, seed: int, shift: float = 0.0) -> pd.DataFrame:
             "p_referable": p,
             "decision": decision,
             "ood_flag": rng.random(n) < 0.02,
+            "ood_score": rng.normal(12 + 4 * shift, 2, n),
         }
         | {s: rng.normal(50 + 20 * shift, 5, n) for s in STATS}
+        | {f"embedding_pc{i + 1}": rng.normal(shift, 1, n) for i in range(10)}
     )
 
 
@@ -81,6 +91,7 @@ def test_batch_metrics_and_batches() -> None:
     assert metrics["psi_p_referable"] > 0.1
     assert metrics["mmd_p"] < 0.05
     assert metrics["shift_brightness"] > 0.5
+    assert metrics["evidently_drift_share"] > 0.5
     assert 0 <= metrics["auroc"] <= 1
     sites = ("eyepacs_test", "aptos", "idrid", "ddr")
     made = batches({s: _scored(600, i) for i, s in enumerate(sites)}, 250, seed=0)
@@ -158,3 +169,32 @@ def test_replay_summary() -> None:
     assert summary.loc["blurred", "fnr"] == 0.5  # one of two graded referable eyes cleared
     assert summary.loc["blurred", "referable_retaken"] == pytest.approx(1 / 3)
     assert "defer_rate" in summary.loc["blurred", "alert"]
+
+
+def test_report_filename_is_safe() -> None:
+    assert report_filename("clinic a/../x", "2026-11-10") == "drift_clinic_a_.._x_2026-11-10.html"
+    assert "/" not in report_filename("../../etc", "2026-11-10")
+
+
+def test_evidently_drift_flags_a_shift_only() -> None:
+    rng = np.random.default_rng(0)
+    reference = pd.DataFrame({"p": rng.beta(2, 5, 600), "ood": rng.normal(12, 2, 600)})
+    same = pd.DataFrame({"p": rng.beta(2, 5, 200), "ood": rng.normal(12, 2, 200)})
+    moved = pd.DataFrame({"p": rng.beta(5, 2, 200), "ood": rng.normal(16, 2, 200)})
+    calm = evidently_drift(reference, same, numerical=["p", "ood"])
+    drifted = evidently_drift(reference, moved, numerical=["p", "ood"])
+    assert calm.drift_share < 0.5
+    assert drifted.drift_share == 1.0
+    assert drifted.drifted_columns == 2
+    assert set(drifted.column_methods) == {"p", "ood"}
+    assert "<html" in drifted.html.lower()
+
+
+def test_embedding_components() -> None:
+    rng = np.random.default_rng(0)
+    reference, other = embedding_components(
+        rng.normal(size=(100, 20)), rng.normal(size=(7, 20)), k=3
+    )
+    assert list(reference.columns) == ["embedding_pc1", "embedding_pc2", "embedding_pc3"]
+    assert other.shape == (7, 3)
+    assert np.allclose(reference.mean(), 0, atol=1e-9)

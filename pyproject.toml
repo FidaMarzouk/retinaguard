@@ -33,8 +33,7 @@ data = [
     "pyarrow>=16",
 ]
 pipeline = [
-    "retinaguard[data]",
-    "sqlalchemy>=2.0,<2.1",  # drift reports read the prediction store
+    "retinaguard[monitoring]",  # the daily drift report is a Dagster asset
     "dagster>=1.8",
     "dagster-webserver>=1.8",
 ]
@@ -57,6 +56,13 @@ train = [
 tracking = [
     "mlflow>=2.17,<3",
     "sqlalchemy>=2.0,<2.1",  # mlflow 2.x imports a pool class that SQLAlchemy 2.1 removed
+]
+# Daily drift reports: read the prediction store, write Evidently reports.
+monitoring = [
+    "retinaguard[data]",
+    "sqlalchemy>=2.0,<2.1",
+    "psycopg[binary]>=3.2",
+    "evidently>=0.7",
 ]
 
 [dependency-groups]
@@ -115,7 +121,7 @@ strict = true
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["streamlit.*", "dagster.*", "sklearn.*", "albumentations.*", "segmentation_models_pytorch.*", "onnxruntime.*"]
+module = ["streamlit.*", "dagster.*", "sklearn.*", "albumentations.*", "segmentation_models_pytorch.*", "onnxruntime.*", "evidently.*"]
 ignore_missing_imports = true
 
 # MLflow's entity constructors (Metric, Param) are not annotated.
@@ -126,6 +132,11 @@ disallow_untyped_calls = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+# Deprecations raised inside Evidently's dependencies when it is imported, not by this code.
+filterwarnings = [
+    "ignore::DeprecationWarning:litestar.*",
+    "ignore:numpy.core is deprecated:DeprecationWarning",
+]
 markers = [
     "integration: needs several components wired together",
     "regression: model-quality gates on fixed fixtures",

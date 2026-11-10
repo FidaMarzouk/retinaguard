@@ -80,6 +80,7 @@ drift_reports = Table(
     Column("error_rate", Float),
     Column("psi_p_referable", Float),
     Column("psi_ood_score", Float),
+    Column("evidently_drift_share", Float),
     Column("alert", String(500)),
     UniqueConstraint("site", "day", name="uq_drift_reports_site_day"),
 )

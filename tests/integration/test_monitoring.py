@@ -66,16 +66,24 @@ def _store(tmp_path: Path) -> tuple[str, PredictionStore]:
 def test_reports_alert_and_upsert(tmp_path: Path) -> None:
     url, store = _store(tmp_path)
     reference = _reference()
-    reports = report(store, reference).set_index("site")
+    html_dir = tmp_path / "drift_reports"
+    reports = report(store, reference, html_dir).set_index("site")
     assert reports.loc["clinic-a", "alert"] is None
     assert "defer_rate" in reports.loc["clinic-b", "alert"]
     assert "ood_rate" in reports.loc["clinic-b", "alert"]
     assert reports.loc["clinic-b", "psi_ood_score"] > 1
+    assert reports.loc["clinic-b", "evidently_drift_share"] == 1.0
+    assert reports.loc["clinic-a", "evidently_drift_share"] < 0.5
     report(store, reference)  # rerunning replaces, never duplicates
     assert len(store.drift()) == 2
-    with TestClient(create_app(tmp_path / "no-models", url)) as client:
-        served = client.get("/drift").json()
-    assert {r["site"] for r in served} == {"clinic-a", "clinic-b"}
+    with TestClient(create_app(tmp_path / "no-models", url, drift_html_dir=html_dir)) as client:
+        served = {r["site"]: r for r in client.get("/drift").json()}
+        assert set(served) == {"clinic-a", "clinic-b"}
+        page = client.get(served["clinic-b"]["report_url"])
+        assert page.status_code == 200
+        assert page.headers["content-type"].startswith("text/html")
+        assert client.get("/drift/reports/..%2Fdb.sqlite").status_code == 404
+        assert client.get("/drift/reports/missing.html").status_code == 404
 
 
 def test_small_batches_never_alert() -> None:
@@ -91,8 +99,13 @@ def test_small_batches_never_alert() -> None:
 def test_dagster_drift_asset(tmp_path: Path) -> None:
     url, _ = _store(tmp_path)
     (tmp_path / "reference.json").write_text(json.dumps(_reference()))
-    config = MonitoringConfig(database_url=url, reference=str(tmp_path / "reference.json"))
+    config = MonitoringConfig(
+        database_url=url,
+        reference=str(tmp_path / "reference.json"),
+        html_dir=str(tmp_path / "drift_reports"),
+    )
     result = dg.materialize([drift_reports], resources={"monitoring": config})
     assert result.success
     metadata = result.asset_materializations_for_node("drift_reports")[0].metadata
     assert metadata["alerts"].value == 1
+    assert len(list((tmp_path / "drift_reports").glob("drift_*.html"))) == 2

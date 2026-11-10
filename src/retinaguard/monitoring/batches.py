@@ -11,7 +11,10 @@ The reference (EyePACS ``calib``, all processed images, as the deployed chain de
 keeps the calibrated referable probabilities, OOD scores and decision rates. A report compares
 each (site, day) batch of the ``predictions`` table with it: PSI of the referable probability
 and of the OOD score (the service stores no embeddings, so the OOD score stands in for them),
-the decision rates and the alert rule of ``drift``. Reports are upserted into ``drift_reports``.
+the decision rates and the alert rule of ``drift``, and Evidently's share of drifted columns
+(referable probability and OOD score of the graded photos). Reports are upserted into
+``drift_reports``; ``--html-dir`` also writes Evidently's HTML report of each batch, which the
+API serves.
 """
 
 import argparse
@@ -25,7 +28,8 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import delete, insert, select
 
-from retinaguard.monitoring.drift import alerts, decision_rates, psi
+from retinaguard.monitoring.drift import alerts, decision_rates, psi, report_filename
+from retinaguard.monitoring.evidently_reports import evidently_drift, save_html
 from retinaguard.serving.store import PredictionStore, drift_reports, predictions
 
 MIN_BATCH = 20  # smaller batches are reported but never alert
@@ -44,10 +48,18 @@ def build_reference(scored: pd.DataFrame, ood_threshold: float) -> dict[str, Any
     }
 
 
-def batch_reports(records: pd.DataFrame, reference: dict[str, Any]) -> pd.DataFrame:
+EVIDENTLY_COLUMNS = ["p_referable", "ood_score"]
+
+
+def batch_reports(
+    records: pd.DataFrame, reference: dict[str, Any], html_dir: Path | None = None
+) -> pd.DataFrame:
     """One row per (site, day) of stored prediction records."""
     if records.empty:
         return pd.DataFrame()
+    reference_frame = pd.DataFrame(
+        {"p_referable": reference["p_referable"], "ood_score": reference["ood_score"]}
+    )
     frame = records.assign(
         site=records["site"].fillna("unknown"),
         day=pd.to_datetime(records["created_at"], utc=True).dt.strftime("%Y-%m-%d"),
@@ -57,6 +69,15 @@ def batch_reports(records: pd.DataFrame, reference: dict[str, Any]) -> pd.DataFr
         ood = batch["ood_score"].astype(float)
         rates = decision_rates(batch["decision"], (ood > reference["ood_threshold"])[ood.notna()])
         raised = alerts(rates, reference["rates"]) if len(batch) >= MIN_BATCH else []
+        graded = pd.DataFrame(
+            {"p_referable": batch["p_referable_calibrated"], "ood_score": ood}
+        ).dropna()
+        share = float("nan")
+        if len(graded) >= MIN_BATCH:
+            drift = evidently_drift(reference_frame, graded, numerical=EVIDENTLY_COLUMNS)
+            share = drift.drift_share
+            if html_dir is not None:
+                save_html(drift, html_dir / report_filename(str(site), str(day)))
         rows.append(
             {
                 "site": site,
@@ -66,6 +87,7 @@ def batch_reports(records: pd.DataFrame, reference: dict[str, Any]) -> pd.DataFr
                 "error_rate": float((batch["deferral_reason"] == "error").mean()),
                 "psi_p_referable": psi(reference["p_referable"], batch["p_referable_calibrated"]),
                 "psi_ood_score": psi(reference["ood_score"], ood),
+                "evidently_drift_share": share,
                 "alert": "; ".join(str(a) for a in raised) or None,
             }
         )
@@ -100,10 +122,12 @@ def write_reports(store: PredictionStore, reports: pd.DataFrame) -> int:
     return len(rows)
 
 
-def report(store: PredictionStore, reference: dict[str, Any]) -> pd.DataFrame:
+def report(
+    store: PredictionStore, reference: dict[str, Any], html_dir: Path | None = None
+) -> pd.DataFrame:
     with store.engine.connect() as connection:
         records = pd.DataFrame(connection.execute(select(predictions)).mappings().all())
-    reports = batch_reports(records, reference)
+    reports = batch_reports(records, reference, html_dir)
     write_reports(store, reports)
     return reports
 
@@ -122,6 +146,7 @@ def main(argv: list[str] | None = None) -> None:
     rep.add_argument(
         "--database-url", default=os.environ.get("DATABASE_URL", "sqlite:///outputs/retinaguard.db")
     )
+    rep.add_argument("--html-dir", type=Path, help="write Evidently HTML reports here")
     args = parser.parse_args(argv)
 
     if args.command == "reference":
@@ -140,7 +165,7 @@ def main(argv: list[str] | None = None) -> None:
         print(f"reference of {reference['images']} images: {reference['rates']}")
         return
     reference = json.loads(args.reference.read_text(encoding="utf-8"))
-    reports = report(PredictionStore(args.database_url), reference)
+    reports = report(PredictionStore(args.database_url), reference, args.html_dir)
     pd.set_option("display.width", 220)
     print(reports.round(3).to_string(index=False) if not reports.empty else "no predictions")
 

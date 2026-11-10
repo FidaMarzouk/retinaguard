@@ -29,6 +29,8 @@ from retinaguard.app.views import (
 )
 
 API_URL = os.environ.get("API_URL", "http://localhost:8000")
+# Address of the API as the viewer's browser sees it (differs from API_URL inside Docker).
+PUBLIC_API_URL = os.environ.get("PUBLIC_API_URL", API_URL)
 OUTCOME_COLOURS = ["#b4b2ab", "#8c8a83", "#d3d1c7", "#86b6ef", "#1c5cab"]
 
 
@@ -235,8 +237,16 @@ def health_page() -> None:
             st.success(
                 "No batch above the alert rule (retake, deferral or OOD rate over 2x reference)."
             )
+        links = reports.pop("report_url").map(
+            lambda url: f"{PUBLIC_API_URL}{url}" if isinstance(url, str) else None
+        )
         st.dataframe(
-            reports.drop(columns=["created_at"]).style.format(precision=3),
+            reports.drop(columns=["created_at"]).assign(evidently_report=links),
+            column_config={
+                "evidently_report": st.column_config.LinkColumn(
+                    "Evidently report", display_text="open"
+                )
+            },
             width="stretch",
             hide_index=True,
         )

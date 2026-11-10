@@ -13,6 +13,7 @@ one. The retake rate is included because degraded photos (blurred, dark) are mos
 by the quality gate: deferrals then fall, and a rule on deferral alone stays silent.
 """
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -88,6 +89,11 @@ def mean_shift(reference: pd.DataFrame, current: pd.DataFrame) -> dict[str, floa
     sd = reference.std().replace(0, np.nan)
     shift = (current.mean() - reference.mean()) / sd
     return {str(k): float(v) for k, v in shift.items()}
+
+
+def report_filename(site: str, day: str) -> str:
+    """File name of the Evidently HTML report of one (site, day) batch."""
+    return f"drift_{re.sub(r'[^A-Za-z0-9._-]', '_', site)}_{day}.html"
 
 
 def decision_rates(decisions: pd.Series, ood_flags: pd.Series | None = None) -> dict[str, float]:

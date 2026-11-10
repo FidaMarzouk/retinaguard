@@ -11,7 +11,9 @@ The reference is the EyePACS ``calib`` split. Batches: each site's primary test 
 batches of ``--batch-size``, plus ``gradual``: EyePACS test batches in which a growing share
 (0 to 100%) of photos comes from DDR. For every batch: the drift signals of ``drift``, the alert
 rule, and the real performance (referable AUROC, false-negative rate of the full chain,
-calibration error), which a deployment would only learn from reviewed cases.
+calibration error), which a deployment would only learn from reviewed cases. Every batch also
+gets Evidently's share of drifted columns (prediction, OOD score, image statistics, embedding
+principal components); ``--html-dir`` writes an Evidently report per scenario.
 """
 
 import argparse
@@ -27,6 +29,12 @@ from retinaguard.models.metrics import auroc
 from retinaguard.models.ood import Mahalanobis
 from retinaguard.models.quality import QUALITY_COLUMNS, REJECT
 from retinaguard.monitoring.drift import alerts, decision_rates, mean_shift, mmd, psi
+from retinaguard.monitoring.evidently_reports import (
+    EMBEDDING_COMPONENTS,
+    embedding_components,
+    evidently_drift,
+    save_html,
+)
 from retinaguard.serving.policy import Thresholds, decide
 from retinaguard.train.calibrate import fitting_rows
 from retinaguard.train.evaluate import evaluation_sets
@@ -34,6 +42,8 @@ from retinaguard.train.evaluate import evaluation_sets
 SITES = ("eyepacs_test", "aptos", "idrid", "ddr")
 BATCH_SIZE = 250
 DRIFT_STATS = ("brightness", "contrast", "sharpness", "dark_fraction", "bright_fraction")
+PC_COLUMNS = [f"embedding_pc{i + 1}" for i in range(EMBEDDING_COMPONENTS)]
+EVIDENTLY_NUMERICAL = ["p_referable", "ood_score", *DRIFT_STATS, *PC_COLUMNS]
 
 
 def scored_images(
@@ -76,6 +86,9 @@ def batch_metrics(
 ) -> dict[str, float | int | str]:
     """Drift signals, alerts and performance of one batch (rows joined with labels)."""
     rates = decision_rates(batch["decision"], batch["ood_flag"])
+    evidently = evidently_drift(
+        reference, batch, numerical=EVIDENTLY_NUMERICAL, categorical=["decision"]
+    )
     mmd2, mmd_p = mmd(embeddings[reference["row"]], embeddings[batch["row"]], seed=seed)
     shift = mean_shift(reference[list(DRIFT_STATS)], batch[list(DRIFT_STATS)])
     referable = (batch["dr_grade"].astype(int) >= 2).to_numpy()
@@ -88,6 +101,8 @@ def batch_metrics(
         "mmd2": mmd2,
         "mmd_p": mmd_p,
         "max_image_shift": float(np.nanmax(np.abs(list(shift.values())))),
+        "evidently_drift_share": evidently.drift_share,
+        "evidently_drifted_columns": evidently.drifted_columns,
         **{f"shift_{k}": v for k, v in shift.items()},
         **rates,
         "alert": "; ".join(str(a) for a in raised),
@@ -128,8 +143,14 @@ def simulate(
     image_stats: pd.DataFrame,
     batch_size: int = BATCH_SIZE,
     seed: int = 0,
+    html_dir: Path | None = None,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     frame, embeddings, _ = scored_images(manifest, grader_dir, quality_dir, image_stats)
+    calib_rows = frame.loc[
+        frame["image_id"].isin(fitting_rows(manifest, "calib")["image_id"]), "row"
+    ].to_numpy()
+    _, components = embedding_components(embeddings[calib_rows], embeddings)
+    frame = frame.join(components, on="row")
     reference = fitting_rows(manifest, "calib")[["image_id", "dr_grade"]].merge(
         frame, on="image_id"
     )
@@ -146,11 +167,20 @@ def simulate(
         if name in SITES
     }
     rows = []
+    by_scenario: dict[str, list[pd.DataFrame]] = {}
     for i, (scenario, day, batch) in enumerate(batches(sets, batch_size, seed)):
         metrics = batch_metrics(batch, reference, embeddings, reference_rates, seed=i)
         rows.append({"scenario": scenario, "day": day} | metrics)
         if scenario == "gradual":
             rows[-1]["ddr_share"] = day / 10
+        by_scenario.setdefault(scenario, []).append(batch)
+    if html_dir is not None:
+        for scenario, parts in by_scenario.items():
+            current = parts[-1] if scenario == "gradual" else pd.concat(parts)  # all-DDR end
+            report = evidently_drift(
+                reference, current, numerical=EVIDENTLY_NUMERICAL, categorical=["decision"]
+            )
+            save_html(report, html_dir / f"{scenario}.html")
     reference_rates |= {
         "auroc": auroc(reference["dr_grade"].astype(int) >= 2, reference["p_referable"]),
         "images": float(len(calib_all)),
@@ -166,6 +196,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--image-stats", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
+    parser.add_argument("--html-dir", type=Path, help="write an Evidently report per scenario")
     args = parser.parse_args(argv)
 
     table, reference = simulate(
@@ -174,6 +205,7 @@ def main(argv: list[str] | None = None) -> None:
         args.quality,
         pd.read_parquet(args.image_stats),
         args.batch_size,
+        html_dir=args.html_dir,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     table.to_csv(args.out, index=False)
@@ -181,6 +213,7 @@ def main(argv: list[str] | None = None) -> None:
     columns = [
         "psi_p_referable",
         "mmd2",
+        "evidently_drift_share",
         "max_image_shift",
         "defer_rate",
         "ood_rate",

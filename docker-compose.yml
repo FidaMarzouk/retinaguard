@@ -31,9 +31,12 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-retinaguard}:${POSTGRES_PASSWORD:-retinaguard-dev}@postgres:5432/${POSTGRES_DB:-retinaguard}
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MODELS_DIR: /srv/models
+      DRIFT_HTML_DIR: /srv/drift_reports
       GIT_SHA: ${GIT_SHA:-unknown}
     # exported models (onnx_export output); never baked into the image
-    volumes: ["${MODELS_DIR:-./outputs/models}:/srv/models:ro"]
+    volumes:
+      - "${MODELS_DIR:-./outputs/models}:/srv/models:ro"
+      - drift_reports:/srv/drift_reports:ro
     ports: ["${API_PORT:-8000}:8000"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -43,9 +46,27 @@ services:
     command: streamlit run src/retinaguard/app/main.py --server.address 0.0.0.0 --server.port 8501
     environment:
       API_URL: http://api:8000
+      PUBLIC_API_URL: http://localhost:${API_PORT:-8000}
     ports: ["${APP_PORT:-8501}:8501"]
+    depends_on: [api]
+
+  # daily drift report: rates, alert rule and Evidently report per site and day
+  monitor:
+    build: { context: ., dockerfile: docker/python.Dockerfile, args: { EXTRA: monitoring } }
+    command: >
+      sh -c "while true; do
+      until python -m retinaguard.monitoring.batches report
+      --reference /srv/models/reference.json --html-dir /srv/drift_reports; do sleep 30; done;
+      sleep 86400; done"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-retinaguard}:${POSTGRES_PASSWORD:-retinaguard-dev}@postgres:5432/${POSTGRES_DB:-retinaguard}
+      DO_NOT_TRACK: "1"  # no Evidently telemetry
+    volumes:
+      - "${MODELS_DIR:-./outputs/models}:/srv/models:ro"
+      - drift_reports:/srv/drift_reports
     depends_on: [api]
 
 volumes:
   pgdata:
+  drift_reports:
   mlflow:
