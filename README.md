@@ -2,6 +2,8 @@
 
 Quality-aware, uncertainty-aware triage for diabetic retinopathy (DR) screening on fundus photographs.
 
+> **Research prototype, not a medical device.** It must not be used for diagnosis or any
+> clinical decision.
 
 ## What it does
 
@@ -20,6 +22,46 @@ deferral policy → lesion overlays → drift monitoring. Any error in the chain
 
 Models are trained on EyePACS and evaluated per site on external datasets (India, China),
 with bootstrap 95% confidence intervals.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph offline["Offline: Kaggle GPU notebooks + local CPU"]
+        raw[(EyePACS, EyeQ, APTOS,<br/>IDRiD, DDR)] --> prep[Crop to fundus,<br/>512 px shards]
+        prep --> manifest[(Manifest + frozen<br/>patient-level splits<br/>Dagster, DVC)]
+        manifest --> train[Train quality model,<br/>grader, lesion U-Net]
+        train --> eval[Per-site evaluation,<br/>bootstrap CIs]
+        train --> fit[Temperature scaling,<br/>conformal thresholds,<br/>OOD detector]
+        train --> mlflow[(MLflow runs,<br/>model registry)]
+        fit --> export[ONNX export,<br/>parity-checked]
+    end
+    subgraph online["Online: Docker Compose, CPU only"]
+        photo([Fundus photo]) --> api
+        export --> api[FastAPI service]
+        api --> chain["preprocess → quality gate → grader<br/>→ OOD check → policy → lesions"]
+        chain --> decision([REFER · NO_REFER ·<br/>DEFER_TO_HUMAN · RETAKE])
+        api --> db[(Postgres: predictions,<br/>audit log, drift reports)]
+        db --> drift[Daily drift report<br/>Dagster schedule]
+        db --> app[Streamlit app]
+        drift --> db
+    end
+```
+
+- **Data.** Each source has an adapter that turns its release into manifest rows (labels mapped
+  to the ICDR scale, patient and eye identifiers, image hashes). Photos are cropped to the
+  fundus disc once and stored as JPEG shards; near-duplicates are found by perceptual hash and
+  confirmed by structural similarity, so no eye crosses a split. Dagster asset checks enforce
+  the data invariants (unique ids, no patient in two splits, no external image in training).
+- **Training** runs in Kaggle notebooks that install this package from GitHub, so the code
+  that trains is the code that is tested. Runs checkpoint every epoch and resume.
+- **Decision policy.** One temperature per head is fitted on `val`; the clearing threshold is
+  fitted on a separate `calib` split by conformal risk control; the OOD detector is a
+  Mahalanobis distance on the grader's embedding. All of it is one `policy.json`.
+- **Serving** loads only ONNX files and that policy (no PyTorch), records every prediction
+  with model hashes and a config hash, and fails safe: any error defers to a human.
+- **Monitoring** compares each site's daily batch of stored predictions with the calibration
+  split and alerts on retake, deferral or OOD rates above twice the reference.
 
 ## Results
 
@@ -124,6 +166,29 @@ Reports are written per site and day to the `drift_reports` table by a daily Dag
 (or `python -m retinaguard.monitoring.batches report`), served at `GET /drift` and shown in the
 app. A random reviewed sample of each batch remains the only way to measure performance live.
 
+## Intended use and limitations
+
+**Intended use:** research and teaching on how a screening model can be wrapped so that it
+knows when not to decide. Every uncertain, unusual or poor-quality photo goes to a human.
+
+**Out of scope:** diagnosis, any clinical decision, other eye diseases (glaucoma, AMD, retinal
+vein occlusion), diabetic macular oedema, children, cameras or imaging methods unlike colour
+fundus photography, and follow-up of a patient over time.
+
+**Known limitations:**
+
+- End-stage disease (vitreous haemorrhage, fibrosis) is sometimes graded as no retinopathy:
+  83 of 906 DDR grade 4 images.
+- The 5% false-negative guarantee holds on average for images like the calibration split
+  (EyePACS); on other sites the rate is measured, not guaranteed.
+- Calibration fitted on EyePACS does not transfer: APTOS is over-scored, DDR under-called.
+- The quality gate asks for more retakes on unfamiliar cameras (8–20% of gradable photos
+  abroad), and 15% of IDRiD's referable eyes are sent back for a retake.
+- Labels come from different grading protocols at each site; some external "errors" are label
+  disagreements.
+- Lesion outlines are much less accurate on DDR than on IDRiD and depend on the training site.
+- One image per eye at one time; no patient history, no second eye, no clinical context.
+
 ## Quick start
 
 Requirements: Python 3.11, [uv](https://docs.astral.sh/uv/), GNU make, Docker.
@@ -204,15 +269,19 @@ rates and latency; read the model card. Its per-site figures come from
 
 ```
 src/retinaguard/
-  data/        dataset adapters, manifest schema, preprocessing, hashing
-  models/      grader, quality model, calibration, conformal deferral, OOD
-  train/       training and evaluation
-  pipeline/    Dagster assets and data checks
-  serving/     FastAPI inference service
-  app/         Streamlit dashboard
-  monitoring/  drift reports
+  data/        dataset adapters, manifest schema, preprocessing, lesion masks, hashing
+  models/      grader, quality model, lesion U-Net, calibration, conformal thresholds, OOD
+  train/       training, prediction, evaluation, calibration, MLflow import
+  export/      ONNX export with parity checks
+  serving/     inference chain, decision policy, overlays, prediction store, FastAPI service
+  app/         Streamlit app and its API client
+  monitoring/  drift signals, site and degradation replays, daily batch reports
+  pipeline/    Dagster assets, data checks, drift schedule
+configs/            Hydra training configs, decision policy targets
+migrations/         Alembic migrations of the prediction store
 notebooks/kaggle/   GPU/CPU jobs run on Kaggle
-tests/              unit, integration and regression tests
+notebooks/          data overview, triage report, monitoring report
+tests/              unit, integration and smoke tests
 ```
 
 ## Data and licences
