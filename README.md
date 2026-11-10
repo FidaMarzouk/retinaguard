@@ -82,6 +82,27 @@ With all three steps, a human handles 25–38% of photos (retakes plus deferrals
 of the referable eyes that are graded get cleared. Calibration curves, accuracy against coverage
 and the decision mix per site are in `notebooks/triage_report.ipynb`.
 
+### Monitoring
+
+Each site's test set was replayed as daily batches of 250 photos and compared with the EyePACS
+calibration split. Drift in the grader's embeddings (MMD) flags every batch from APTOS, IDRiD
+and DDR and none of the 13 EyePACS batches, yet the external sites keep their AUROC: the drift
+is mostly a different population and case mix, and what degrades is calibration (ECE 0.04 on
+EyePACS, 0.11 on APTOS). In a gradual mix of DDR into EyePACS batches, MMD detects the change
+from 30% DDR.
+
+To see drift that does hurt, the 516 IDRiD photos were sent through the running service clean,
+blurred and darkened. The quality gate catches most degraded photos (83% retakes at σ = 2 px
+blur, 82% at 30% brightness), and a rule watching only deferral and out-of-distribution rates
+stays silent: deferrals fall as retakes rise, even when the photos that get through at 30%
+brightness miss 6.2% of referable eyes. The alert rule therefore flags a batch whose retake,
+deferral or out-of-distribution rate exceeds twice the reference; it flags those degraded
+batches and no real site batch. Figures are in `notebooks/monitoring_report.ipynb`.
+
+Reports are written per site and day to the `drift_reports` table by a daily Dagster schedule
+(or `python -m retinaguard.monitoring.batches report`), served at `GET /drift` and shown in the
+app. A random reviewed sample of each batch remains the only way to measure performance live.
+
 ## Quick start
 
 Requirements: Python 3.11, [uv](https://docs.astral.sh/uv/), GNU make, Docker.

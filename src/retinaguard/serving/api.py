@@ -82,6 +82,21 @@ class PredictionRecord(BaseModel):
     error: str | None
 
 
+class DriftReport(BaseModel):
+    site: str
+    day: str
+    predictions: int
+    retake_rate: float | None
+    defer_rate: float | None
+    refer_rate: float | None
+    ood_rate: float | None
+    error_rate: float | None
+    psi_p_referable: float | None
+    psi_ood_score: float | None
+    alert: str | None
+    created_at: datetime
+
+
 def _config_hash(models_dir: Path) -> str:
     """SHA-256 of the files that define a decision: model list and fitted policy."""
     digest = hashlib.sha256()
@@ -214,6 +229,11 @@ def create_app(models_dir: Path, database_url: str, git_sha: str = "unknown") ->
     ) -> list[PredictionRecord]:
         rows = store().recent(None if decision is None else decision.value, limit)
         return [PredictionRecord(**row) for row in rows]
+
+    @app.get("/drift")
+    def drift(limit: Annotated[int, Query(ge=1, le=1000)] = 100) -> list[DriftReport]:
+        """Drift reports per site and day (written by ``retinaguard.monitoring.batches``)."""
+        return [DriftReport(**row) for row in store().drift(limit)]
 
     @app.get("/predictions/{prediction_id}")
     def get_prediction(prediction_id: str) -> PredictionRecord:

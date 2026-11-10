@@ -219,6 +219,27 @@ def health_page() -> None:
         )
     )
     st.altair_chart(chart, width="stretch")
+    st.subheader("Drift reports")
+    reports = pd.DataFrame(api_call("drift") or [])
+    if reports.empty:
+        st.info(
+            "No drift reports yet: `python -m retinaguard.monitoring.batches report` (or the daily "
+            "Dagster schedule) writes one per site and day."
+        )
+    else:
+        alerted = reports["alert"].notna()
+        if alerted.any():
+            for _, row in reports[alerted].iterrows():
+                st.error(f"{row['day']} · {row['site']}: {row['alert']}")
+        else:
+            st.success(
+                "No batch above the alert rule (retake, deferral or OOD rate over 2x reference)."
+            )
+        st.dataframe(
+            reports.drop(columns=["created_at"]).style.format(precision=3),
+            width="stretch",
+            hide_index=True,
+        )
     st.caption(
         "A rising retake, deferral or error rate, or a shift in the mean referable probability "
         f"(now {stats['mean_p_referable']:.2f}), is the first sign that incoming photos changed."

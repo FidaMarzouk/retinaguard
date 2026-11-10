@@ -38,6 +38,10 @@ class ApiClient:
         result: list[dict[str, Any]] = self._get("/predictions", decision=decision, limit=limit)
         return result
 
+    def drift(self, limit: int = 100) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = self._get("/drift", limit=limit)
+        return result
+
     def predict(
         self, image: bytes, filename: str, *, site: str | None = None, lesions: bool = False
     ) -> dict[str, Any]:

@@ -5389,6 +5389,7 @@ pipeline = [
     { name = "pandas" },
     { name = "pandera" },
     { name = "pyarrow" },
+    { name = "sqlalchemy" },
 ]
 tracking = [
     { name = "mlflow" },
@@ -5454,6 +5455,7 @@ requires-dist = [
     { name = "scikit-learn", marker = "extra == 'train'", specifier = ">=1.5" },
     { name = "segmentation-models-pytorch", marker = "extra == 'train'", specifier = ">=0.4" },
     { name = "sqlalchemy", marker = "extra == 'api'", specifier = ">=2.0,<2.1" },
+    { name = "sqlalchemy", marker = "extra == 'pipeline'", specifier = ">=2.0,<2.1" },
     { name = "sqlalchemy", marker = "extra == 'tracking'", specifier = ">=2.0,<2.1" },
     { name = "streamlit", marker = "extra == 'app'", specifier = ">=1.38" },
     { name = "timm", marker = "extra == 'train'", specifier = ">=1.0" },

@@ -34,6 +34,7 @@ data = [
 ]
 pipeline = [
     "retinaguard[data]",
+    "sqlalchemy>=2.0,<2.1",  # drift reports read the prediction store
     "dagster>=1.8",
     "dagster-webserver>=1.8",
 ]

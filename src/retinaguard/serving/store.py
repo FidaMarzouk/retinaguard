@@ -1,6 +1,7 @@
 """Prediction records and an audit log, in Postgres (Docker Compose) or SQLite (local).
 
-Only a SHA-256 of each uploaded image is kept, never the image. The schema is created by the
+Only a SHA-256 of each uploaded image is kept, never the image. ``drift_reports`` holds one
+report per site and day (``retinaguard.monitoring.batches``). The schema is created by the
 Alembic migrations in ``migrations/``; ``create_schema`` builds the same tables directly, for
 tests and a fresh local SQLite file.
 """
@@ -13,6 +14,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     Column,
+    Connection,
     DateTime,
     Engine,
     Float,
@@ -21,6 +23,7 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    UniqueConstraint,
     create_engine,
     func,
     insert,
@@ -62,6 +65,26 @@ audit_log = Table(
 )
 
 
+drift_reports = Table(
+    "drift_reports",
+    metadata,
+    Column("report_id", Integer, primary_key=True, autoincrement=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("site", String(64), nullable=False),
+    Column("day", String(10), nullable=False),
+    Column("predictions", Integer, nullable=False),
+    Column("retake_rate", Float),
+    Column("defer_rate", Float),
+    Column("refer_rate", Float),
+    Column("ood_rate", Float),
+    Column("error_rate", Float),
+    Column("psi_p_referable", Float),
+    Column("psi_ood_score", Float),
+    Column("alert", String(500)),
+    UniqueConstraint("site", "day", name="uq_drift_reports_site_day"),
+)
+
+
 def create_schema(engine: Engine) -> None:
     metadata.create_all(engine)
 
@@ -99,14 +122,34 @@ class PredictionStore:
         self, event: str, detail: Mapping[str, Any], prediction_id: str | None = None
     ) -> None:
         with self.engine.begin() as connection:
-            connection.execute(
-                insert(audit_log).values(
-                    created_at=datetime.now(UTC),
-                    event=event,
-                    prediction_id=prediction_id,
-                    detail=dict(detail),
-                )
+            self.audit_with(connection, event, detail, prediction_id)
+
+    @staticmethod
+    def audit_with(
+        connection: Connection,
+        event: str,
+        detail: Mapping[str, Any],
+        prediction_id: str | None = None,
+    ) -> None:
+        """Audit event inside an open transaction."""
+        connection.execute(
+            insert(audit_log).values(
+                created_at=datetime.now(UTC),
+                event=event,
+                prediction_id=prediction_id,
+                detail=dict(detail),
             )
+        )
+
+    def drift(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Most recent drift reports first."""
+        query = (
+            select(drift_reports)
+            .order_by(drift_reports.c.day.desc(), drift_reports.c.site)
+            .limit(limit)
+        )
+        with self.engine.connect() as connection:
+            return [dict(row._mapping) for row in connection.execute(query)]
 
     def get(self, prediction_id: str) -> dict[str, Any] | None:
         with self.engine.connect() as connection:
