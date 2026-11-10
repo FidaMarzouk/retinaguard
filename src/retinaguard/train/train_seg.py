@@ -54,6 +54,13 @@ from retinaguard.train.train_grader import (
 LOG_EVERY_STEPS = 50
 
 
+def _worker_context(num_workers: int) -> str | None:
+    """Start loader workers fresh ("spawn") rather than forked: a fork made after OpenCV's
+    threads have run (e.g. preparing the lesion set in the same notebook) can hang on its
+    first image decode."""
+    return "spawn" if num_workers > 0 else None
+
+
 def seg_augment() -> A.Compose:
     """Flips, right-angle rotations and mild photometric changes; no elastic distortion, which
     would move lesion boundaries."""
@@ -139,7 +146,12 @@ def segment(
 ) -> PixelStats:
     """Pixel counts of the full images of ``rows``, in row order."""
     model.eval()
-    loader = DataLoader(SegDataset(rows), batch_size=1, num_workers=num_workers)
+    loader = DataLoader(
+        SegDataset(rows),
+        batch_size=1,
+        num_workers=num_workers,
+        multiprocessing_context=_worker_context(num_workers),
+    )
     parts = []
     for images, masks in loader:
         with torch.autocast(device.type, dtype=torch.float16, enabled=amp):
@@ -214,6 +226,7 @@ def train(cfg: DictConfig) -> Path:
         pin_memory=device.type == "cuda",
         persistent_workers=cfg.train.num_workers > 0,
         worker_init_fn=_init_worker,
+        multiprocessing_context=_worker_context(cfg.train.num_workers),
         drop_last=True,
     )
     model = seg_model(cfg.model.encoder, pretrained=cfg.model.pretrained).to(device)
@@ -262,8 +275,13 @@ def train(cfg: DictConfig) -> Path:
             scaler.update()
             scheduler.step()
             losses.append(float(loss.detach()))
+            if step == 1 and epoch == start_epoch:
+                print(f"first batch after {time.perf_counter() - started:.0f} s", flush=True)
             if step % LOG_EVERY_STEPS == 0:
-                print(f"epoch {epoch} step {step}/{steps_per_epoch} loss {np.mean(losses):.4f}")
+                print(
+                    f"epoch {epoch} step {step}/{steps_per_epoch} loss {np.mean(losses):.4f}",
+                    flush=True,
+                )
 
         metrics = {"train_loss": float(np.mean(losses)), "lr": float(scheduler.get_last_lr()[0])}
         last_epoch = epoch == cfg.train.epochs - 1
