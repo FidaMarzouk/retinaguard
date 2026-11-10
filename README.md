@@ -82,6 +82,27 @@ With all three steps, a human handles 25–38% of photos (retakes plus deferrals
 of the referable eyes that are graded get cleared. Calibration curves, accuracy against coverage
 and the decision mix per site are in `notebooks/triage_report.ipynb`.
 
+### Lesion overlays and site bias
+
+A U-Net (ResNet-34 encoder) outlines microaneurysms, haemorrhages, hard and soft exudates on
+1024 px crops, trained on the IDRiD (81 images, one camera) and DDR (757 images, many cameras)
+lesion sets. Scores are area under the precision-recall curve over all pixels of a test set,
+with 95% bootstrap CIs over images; Dice at 0.5 in brackets.
+
+| Lesion | IDRiD test (27 images) | DDR test (225 images) |
+|---|---|---|
+| Microaneurysms | 0.33 (0.29–0.37) [0.48] | 0.14 (0.11–0.17) [0.29] |
+| Haemorrhages | 0.53 (0.41–0.59) [0.61] | 0.21 (0.11–0.42) [0.41] |
+| Hard exudates | 0.26 (0.16–0.81) [0.34] | 0.48 (0.40–0.58) [0.59] |
+| Soft exudates | 0.53 (0.36–0.62) [0.65] | 0.19 (0.11–0.29) [0.36] |
+
+DDR is the harder site, and the model depends on where it was trained: paired against the
+pooled model on the same test images, a model trained on DDR alone loses 0.02–0.07 AUPR on
+IDRiD, and one trained on IDRiD alone loses 0.04–0.19 on DDR (CIs exclude zero for three of
+four lesions each way), while each matches the pooled model on its own site. The overlays are
+an explanation for the reader of a referral, not an input to the decision; `lesions=true` on
+`/predict` adds about 1.1 s on CPU.
+
 ### Monitoring
 
 Each site's test set was replayed as daily batches of 250 photos and compared with the EyePACS
